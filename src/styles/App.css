@@ -400,7 +400,7 @@
 
 .note-field { display: grid; gap: 5px; margin-top: 10px; color: #6f7c75; font-size: 9px; font-weight: 600; }
 .note-field textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 8px 9px; border: 1px solid #e3e9e4; border-radius: 4px; color: #38453f; background: #fff; font: inherit; font-size: 10px; }
-.note-field textarea:focus, .data-field input:focus { outline: 2px solid #a9c6e2; outline-offset: 1px; }
+.note-field textarea:focus, .data-field input:focus, .data-field textarea:focus { outline: 2px solid #a9c6e2; outline-offset: 1px; }
 
 .delivery-section {
   position: relative;
@@ -431,9 +431,13 @@
 .reset-button:hover { color: var(--accent-strong); }
 
 .delivery-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 17px; }
-.equipment-field, .recipient-field { grid-column: span 2; }
+.equipment-field, .recipient-field, .accessories-field { grid-column: span 2; }
 .data-field { display: grid; gap: 5px; min-width: 0; color: #849089; font-size: 9px; font-weight: 600; }
+.data-field input[aria-invalid="true"] { border-color: #a9443a; }
+.data-field input[aria-invalid="true"]:focus { outline-color: #e1b1aa; }
+.data-field-error { color: #a9443a; font-size: 10px; font-weight: 500; }
 .data-field input, .data-field select, .date-value { width: 100%; min-width: 0; height: 34px; box-sizing: border-box; padding: 0 9px; border: 1px solid #e5eae6; border-radius: 4px; color: #39463f; background: #fff; font: inherit; font-size: 10px; font-weight: 500; }
+.data-field textarea { width: 100%; min-width: 0; min-height: 48px; box-sizing: border-box; padding: 8px 9px; border: 1px solid #e5eae6; border-radius: 4px; color: #39463f; background: #fff; font: inherit; font-size: 10px; font-weight: 500; resize: vertical; }
 .data-field select { padding-right: 24px; text-overflow: ellipsis; cursor: pointer; }
 .data-field select:focus { outline: 2px solid #a9c6e2; outline-offset: 1px; }
 .date-value { display: flex; align-items: center; color: #65736c; background: #f9faf9; }
@@ -535,6 +539,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent-mid); ou
   .part-copy small { font-size: 8px; }
   .model-legend { gap: 9px; font-size: 9px; }
   .delivery-fields { grid-template-columns: 1fr; }
-  .equipment-field, .recipient-field { grid-column: auto; }
+  .equipment-field, .recipient-field, .accessories-field { grid-column: auto; }
   .date-field { grid-column: auto; }
 }

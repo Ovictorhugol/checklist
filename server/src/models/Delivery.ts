@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose'
+import { isValidCpf, normalizeCpf } from '../domain/cpf.js'
 
 export interface IDeliveryPart {
   id: string
@@ -29,10 +30,12 @@ export interface IDelivery {
   serialNumber: string
   recipient: string
   recipientEmail?: string
+  recipientCpf?: string
   recipientDepartment?: string
   equipment: string
   model: string
   brand: string
+  accessories?: string
   status: DeliveryStatus
   isReturned: boolean
   returnedAt?: string
@@ -105,6 +108,15 @@ const deliverySchema = new Schema<IDelivery>(
       lowercase: true,
       trim: true,
     },
+    recipientCpf: {
+      type: String,
+      // Optional for old records. New deliveries require CPF in the API.
+      set: (value: unknown) => typeof value === 'string' ? normalizeCpf(value) : value,
+      validate: {
+        validator: (value: unknown) => value == null || isValidCpf(value),
+        message: 'Informe um CPF válido para o responsável.',
+      },
+    },
     recipientDepartment: {
       type: String,
       required: true,
@@ -124,6 +136,11 @@ const deliverySchema = new Schema<IDelivery>(
       type: String,
       required: true,
       trim: true,
+    },
+    accessories: {
+      type: String,
+      trim: true,
+      default: '',
     },
     status: {
       type: String,

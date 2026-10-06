@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Login Microsoft | Donato</title>
+  </head>
+  <body>
+    <p>Concluindo autenticação...</p>
+    <script type="module">
+      import { broadcastResponseToMainFrame } from '@azure/msal-browser/redirect-bridge'
+      broadcastResponseToMainFrame().catch(() => {
+        document.querySelector('p').textContent = 'Não foi possível concluir. Feche esta janela e tente entrar novamente.'
+      })
+    </script>
+  </body>
+</html>

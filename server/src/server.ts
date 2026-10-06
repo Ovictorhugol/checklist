@@ -10,6 +10,7 @@ import { initializeProtocolCounters } from './services/protocol.js'
 import { Delivery } from './models/Delivery.js'
 import { User } from './models/User.js'
 import { ProtocolCounter } from './models/ProtocolCounter.js'
+import { isMicrosoftAuth } from './config/identity.js'
 
 dotenv.config()
 
@@ -37,15 +38,18 @@ app.get('/api/health', (_req, res) => {
 async function startServer() {
   validateEnvironment()
   await connectDB()
-  await Promise.all([Delivery.init(), User.init(), ProtocolCounter.init()])
-  await ensureAdminUser()
+  await Promise.all([Delivery.init(), ProtocolCounter.init()])
+  if (!isMicrosoftAuth()) {
+    await User.init()
+    await ensureAdminUser()
+  }
   await initializeProtocolCounters()
 
   app.listen(PORT, () => {
     console.log(`\n🚀 Servidor rodando na porta ${PORT}`)
     console.log(`📍 Endpoints disponíveis:`)
-    console.log(`   - POST http://localhost:${PORT}/api/auth/register`)
-    console.log(`   - POST http://localhost:${PORT}/api/auth/login`)
+    console.log(`   - Autenticação: ${isMicrosoftAuth() ? 'Microsoft Entra ID' : 'contas locais'}`)
+    console.log(`   - GET  http://localhost:${PORT}/api/auth/me`)
     console.log(`   - GET  http://localhost:${PORT}/api/deliveries`)
     console.log(`   - POST http://localhost:${PORT}/api/deliveries`)
     console.log(`   - PUT  http://localhost:${PORT}/api/deliveries/:id/return`)

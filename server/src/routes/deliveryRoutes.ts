@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import {
   getAllDeliveries,
+  getMyDeliveries,
   getDeletedDeliveries,
   getDeliveryById,
   getNextProtocol,
@@ -15,11 +16,12 @@ const router = Router()
 router.use(authMiddleware)
 
 router.get('/', getAllDeliveries)
+router.get('/mine', getMyDeliveries)
 router.get('/deleted', adminOnlyMiddleware, getDeletedDeliveries)
-router.get('/next-protocol', getNextProtocol)
+router.get('/next-protocol', adminOnlyMiddleware, getNextProtocol)
 router.get('/:id', getDeliveryById)
-router.post('/', createDelivery)
-router.put('/:id/return', saveReturnInspection)
+router.post('/', adminOnlyMiddleware, createDelivery)
+router.put('/:id/return', adminOnlyMiddleware, saveReturnInspection)
 router.delete('/:id', adminOnlyMiddleware, deleteDelivery)
 
 export default router

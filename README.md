@@ -129,7 +129,118 @@ Todas as rotas têm o prefixo `/api`. Os endpoints marcados como autenticados ou
 
 O MongoDB armazena contadores anuais na coleção `protocolcounters`, usuários, entregas e auditorias na coleção `delivery_deletion_audits`. Cada nova auditoria inclui o snapshot integral da entrega, o ID/e-mail do administrador e o timestamp. Registros de auditoria criados por versões anteriores podem conter somente os campos disponíveis à época.
 
+## Login corporativo com Microsoft Entra ID
+
+A integração está implementada e é ativada por `AUTH_PROVIDER=microsoft` na API e `VITE_AUTH_PROVIDER=microsoft` no frontend. O modo padrão continua sendo `local` até você preencher os IDs dos aplicativos. No modo Microsoft, o site usa MSAL com autorização por código e PKCE; a API verifica os tokens com as chaves públicas da Microsoft. Nenhum segredo de aplicativo é necessário para este fluxo.
+
+O modo Microsoft não cria usuários no banco, não inicializa o administrador local e bloqueia cadastro, login por senha e alteração de senha. As entregas continuam no banco configurado. As auditorias guardam a identidade estável `tenantId:objectId` e o identificador de exibição do autor. Usuários locais já existentes não são removidos automaticamente. A migração do MongoDB para RDS é uma mudança separada.
+
+### 1. Confirmar a identidade corporativa
+
+Acesse [Microsoft Entra admin center](https://entra.microsoft.com/) com uma conta autorizada a registrar e administrar aplicativos. Confirme que os usuários aparecem no diretório da empresa. Se as contas existem apenas no Active Directory local, o administrador precisa configurar a identidade híbrida antes desta integração; veja [Microsoft Entra Connect e entrada de usuários](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/plan-connect-user-signin).
+
+### 2. Registrar o aplicativo da API
+
+Em **Entra ID > Registros de aplicativos > Novo registro**, crie **Donato Checklist API**. Selecione **Contas somente neste diretório organizacional**. Não cadastre URI de redirecionamento para a API. Na visão geral, copie o **ID do diretório (tenant)** e o **ID do aplicativo (cliente)** da API. Use os IDs de aplicativo, e não os IDs de objeto.
+
+Em **Expor uma API**, configure a URI como `api://ID_DO_APLICATIVO_API`. Adicione um escopo chamado `access_as_user`, habilitado, com consentimento permitido a **somente administradores**. Os textos de exibição podem ser “Acessar o Checklist Donato” e “Permite usar o checklist em nome do usuário conectado”.
+
+Em **Manifesto**, configure `api.requestedAccessTokenVersion` como `2`. Edite apenas essa propriedade dentro do objeto `api`, preservando os escopos e demais propriedades existentes. A API deste projeto aceita tokens v2. Veja [configuração da API protegida](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-protected-web-api-app-configuration) e a propriedade [requestedAccessTokenVersion](https://learn.microsoft.com/en-us/entra/identity-platform/reference-app-manifest#requestedaccesstokenversion-attribute).
+
+### 3. Criar funções e autorizar usuários
+
+No registro **Donato Checklist API**, abra **Funções de aplicativo (App roles)** e crie duas funções habilitadas, com tipo de membro permitido **Usuários/Grupos**:
+
+| Nome de exibição | Valor exato | Acesso |
+| --- | --- | --- |
+| Operador | `operator` | Consultar somente entregas destinadas ao e-mail da conta autenticada. |
+| Administrador | `admin` | Consultar todas as entregas, cadastrar, registrar devoluções, excluir e consultar auditorias. |
+
+Em **Aplicativos empresariais > Donato Checklist API > Usuários e grupos**, adicione cada usuário e selecione sua função. Atribua funções no aplicativo **API**, pois são elas que precisam chegar no token de acesso. Usuários sem uma dessas funções são recusados pelo backend. Quando as duas estão presentes, prevalece `admin`.
+
+Em **Propriedades**, configure **Atribuição necessária? = Sim** para a API. Você pode começar com atribuições individuais. Se usar grupos, confirme com o administrador as licenças necessárias. Veja [atribuição de funções de aplicativo](https://learn.microsoft.com/en-us/entra/identity-platform/howto-add-app-roles-in-apps).
+
+### 4. Registrar o aplicativo do site
+
+Crie outro registro chamado **Donato Checklist Web**, também somente para contas do diretório da empresa. Copie o **ID do aplicativo (cliente)** do Web.
+
+Em **Autenticação > Adicionar uma plataforma > Aplicativo de página única (SPA)**, adicione:
+
+- Desenvolvimento: `http://localhost:5173/redirect.html`.
+- Produção: `https://SEU_DOMINIO/redirect.html`, substituindo pelo endereço real do site.
+
+Protocolo, domínio, porta e caminho precisam corresponder ao endereço usado no navegador. O Vite está configurado com porta fixa 5173. A página `redirect.html` é incluída no build. Não ative o fluxo implícito e não crie um client secret para o frontend. Veja [configuração de SPA](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-spa-app-configuration).
+
+Em **Permissões de API > Adicionar uma permissão > Minhas APIs**, selecione **Donato Checklist API > Permissões delegadas > access_as_user**. Adicione e solicite ao administrador **Conceder consentimento de administrador** para a organização. Não é necessário pedir acesso ao Microsoft Graph para este login. Veja [configuração de permissões de API](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-configure-app-access-web-apis).
+
+Se ativar **Atribuição necessária? = Sim** também no aplicativo empresarial Web, atribua os usuários a ele com acesso padrão. Isso é separado das funções atribuídas na API.
+
+### 5. Configurar o projeto
+
+Crie ou edite `.env` na raiz com os valores do portal:
+
+```dotenv
+VITE_AUTH_PROVIDER=microsoft
+VITE_ENTRA_TENANT_ID=ID_DO_DIRETORIO
+VITE_ENTRA_CLIENT_ID=ID_DO_APLICATIVO_WEB
+VITE_ENTRA_API_CLIENT_ID=ID_DO_APLICATIVO_API
+```
+
+Em `server/.env`, mantenha a configuração real do banco e da porta e acrescente:
+
+```dotenv
+AUTH_PROVIDER=microsoft
+ENTRA_TENANT_ID=ID_DO_DIRETORIO
+ENTRA_CLIENT_ID=ID_DO_APLICATIVO_WEB
+ENTRA_API_CLIENT_ID=ID_DO_APLICATIVO_API
+```
+
+Os valores dos três IDs devem ser GUIDs reais. `JWT_SECRET`, `ADMIN_EMAIL` e `ADMIN_PASSWORD` são usados somente no modo local; não são exigidos no modo Microsoft. As variáveis `VITE_*` são públicas e entram no build. Reinicie o Vite ao editar o ambiente; em produção, gere e publique um novo build do frontend. Reinicie também a API.
+
+Na raiz do projeto, em dois terminais:
+
+```powershell
+npm run server
+```
+
+```powershell
+npm run dev
+```
+
+Abra `http://localhost:5173` e clique em **Entrar com Microsoft**. Permita a janela de login. O perfil mostrado vem de `/api/auth/me`, após validação no servidor. Tokens são renovados silenciosamente pelo MSAL; quando for necessária uma nova interação, o site volta ao login.
+
+### 6. Publicar e validar
+
+Publique o frontend e a página `redirect.html` no mesmo domínio. A hospedagem deve servir `/redirect.html` como arquivo real, sem substituir pelo `index.html`. Configure nessa página **Cache-Control: no-store** e remova **Cross-Origin-Opener-Policy**. Sirva os scripts do build no mesmo domínio. A página de retorno usa o redirect bridge exigido pelo MSAL Browser v5; veja [instruções oficiais para Vite e hospedagem](https://github.com/AzureAD/microsoft-authentication-library-for-js/blob/dev/lib/msal-browser/docs/redirect-bridge.md).
+
+Use HTTPS em produção e encaminhe `/api` para o Express. O backend precisa alcançar os endpoints Microsoft para consultar as chaves públicas. O sistema pode permanecer hospedado na AWS.
+
+Confira com contas de teste:
+
+- Operador entra em “Minhas entregas” e consulta somente os equipamentos destinados ao e-mail da conta. Pode ver detalhes e imprimir, mas não cadastrar, registrar devoluções, excluir nem consultar auditorias.
+- Administrador entra, exclui uma entrega e a auditoria contém sua identidade corporativa.
+- Usuário sem função e conta de outra organização não acessam a API.
+- Atualizar a página mantém a sessão; sair retorna ao login.
+- Cadastro local, login por senha e alteração de senha são recusados no modo Microsoft.
+
+Erros comuns: `AADSTS50011` indica divergência da URI de retorno; consentimento pendente exige aprovação do administrador; erro 403 de função exige atribuição no aplicativo empresarial **API**; erro 401 pode indicar tokens v1, IDs incorretos ou token expirado. Após alterar funções, saia e entre novamente para obter um token novo. Mudanças de acesso podem levar tempo para aparecer nos tokens já emitidos.
+
+Os testes automatizados verificam assinaturas, expiração, emissor, destinatário, tenant, aplicativo cliente, escopo, funções e bloqueio das rotas locais. A validação de login real, MFA e políticas corporativas deve ser feita no tenant da empresa.
+
 ## Comandos
+
+O formulário exige CPF válido do responsável nas novas entregas. A API grava `recipientCpf` como uma string com 11 dígitos, preservando zeros iniciais, e o termo exibe a máscara `000.000.000-00`. O termo de empréstimo não inclui a seção “Itens conferidos”; os detalhes da inspeção continuam disponíveis na tela da entrega.
+
+O banco usado pelo backend continua sendo MongoDB. O modelo Mongoose já inclui o CPF; basta reiniciar a API, sem alteração manual de coleções ou preenchimento dos documentos antigos. Entregas antigas sem CPF podem ser consultadas, devolvidas e arquivadas normalmente. O snapshot de exclusão preserva o CPF quando ele existir.
+
+Para PostgreSQL/RDS, `server/sql/001_checklist_schema.sql` inclui `recipient_cpf` nas instalações novas. Se as tabelas já existirem, execute na conexão PostgreSQL do projeto:
+
+```sql
+\set ON_ERROR_STOP on
+\i server/sql/002_delivery_recipient_cpf.sql
+```
+
+Essa alteração adiciona a coluna no schema `checklist_donato`, aceita `NULL` nos registros antigos e exige 11 dígitos nos valores presentes. A API valida os dígitos verificadores. CPF não tem restrição de unicidade, pois uma pessoa pode receber vários equipamentos. O script SQL deve ser executado pelo proprietário da tabela ou por um administrador autorizado; não foi aplicado automaticamente ao RDS. Esses scripts preparam o esquema SQL, mas não substituem a migração do backend de MongoDB para PostgreSQL.
 
 Na raiz:
 

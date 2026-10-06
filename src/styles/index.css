@@ -1,5 +1,5 @@
 :root {
-  font-family: "Segoe UI Variable", "Aptos", "Trebuchet MS", sans-serif;
+  font-family: "Roboto", Arial, sans-serif;
   color: #26332d;
   background: #f7f9fc;
   --accent: #326fae;
@@ -24,7 +24,7 @@ body {
   margin: 0;
 }
 
-button, input, textarea { font-family: inherit; }
+button, input, textarea, select { font-family: inherit; }
 
 button { -webkit-tap-highlight-color: transparent; }
 

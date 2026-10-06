@@ -19,9 +19,11 @@ import DeletedDeliveriesPage from '../pages/DeletedDeliveriesPage'
 import LoginScreen from '../pages/LoginScreen'
 import { equipmentCatalog, getInitialParts, type EquipmentId, type EquipmentPart, type InspectionStatus } from '../domain/inspection'
 import { useDeliveries } from '../hooks/useDeliveries'
-import { getLocalSession, getUserRole, logoutLocalSession, type AuthUser } from '../services/auth'
+import { getLocalSession, getUserName, getUserRole, logoutLocalSession, type AuthUser } from '../services/auth'
 import { apiChangePassword } from '../services/api'
+import { microsoftAuthEnabled, logoutMicrosoft } from '../services/microsoftAuth'
 import '../styles/App.css'
+import { formatCpf, isValidCpf, normalizeCpf } from '../domain/cpf'
 
 const appStartDate = new Date()
 
@@ -29,12 +31,15 @@ function App() {
   const [equipmentId, setEquipmentId] = useState<EquipmentId>('notebook')
   const [equipmentModel, setEquipmentModel] = useState('')
   const [equipmentBrand, setEquipmentBrand] = useState('')
+  const [accessories, setAccessories] = useState('')
   const [parts, setParts] = useState(() => getInitialParts('notebook'))
   const [selectedPartId, setSelectedPartId] = useState('display')
   const [assetTag, setAssetTag] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
   const [recipient, setRecipient] = useState('')
   const [recipientEmail, setRecipientEmail] = useState('')
+  const [recipientCpf, setRecipientCpf] = useState('')
+  const [recipientCpfTouched, setRecipientCpfTouched] = useState(false)
   const [recipientDepartment, setRecipientDepartment] = useState('')
   const [registered, setRegistered] = useState(false)
   const [registrationBusy, setRegistrationBusy] = useState(false)
@@ -43,16 +48,17 @@ function App() {
   const [activePage, setActivePage] = useState<'checklist' | 'deliveries' | 'deleted'>('deliveries')
   const [deliveriesResetKey, setDeliveriesResetKey] = useState(0)
   const [userEmail, setUserEmail] = useState<string | null>(getLocalSession)
+  const [userName, setUserName] = useState<string | null>(getUserName)
   const [userRole, setUserRole] = useState<'admin' | 'operator'>(getUserRole)
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
   const [passwordBusy, setPasswordBusy] = useState(false)
-  const { deliveries, loadError, loading, addDelivery, saveReturnInspection, deleteDelivery, refresh } = useDeliveries(userEmail)
+  const { deliveries, loadError, loading, addDelivery, saveReturnInspection, deleteDelivery, refresh } = useDeliveries(userEmail, userRole === 'operator')
 
   useEffect(() => {
-    const expireSession = () => { logoutLocalSession(); setUserEmail(null); setUserRole('operator') }
+    const expireSession = () => { logoutLocalSession(); setUserEmail(null); setUserName(null); setUserRole('operator') }
     window.addEventListener('donato-session-expired', expireSession)
     return () => window.removeEventListener('donato-session-expired', expireSession)
   }, [])
@@ -62,10 +68,13 @@ function App() {
   const damagedCount = parts.filter((part) => part.status === 'damaged').length
   const isComplete = inspectedCount === parts.length
   const isRecipientEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim())
+  const isRecipientCpfValid = isValidCpf(recipientCpf)
+  const showCpfError = !isRecipientCpfValid && (recipientCpfTouched || normalizeCpf(recipientCpf).length === 11)
   const deliveryBlockers = [
     ...(!assetTag.trim() ? ['Patrimônio'] : []),
     ...(!serialNumber.trim() ? ['Número de série'] : []),
     ...(!recipient.trim() ? ['Responsável pelo recebimento'] : []),
+    ...(!recipientCpf.trim() ? ['CPF do responsável'] : !isRecipientCpfValid ? ['Informe um CPF válido'] : []),
     ...(!recipientEmail.trim() ? ['E-mail do responsável'] : !isRecipientEmailValid ? ['Informe um e-mail válido (ex.: exemplo@donatoholhos.com)'] : []),
     ...(!recipientDepartment.trim() ? ['Setor do responsável'] : []),
     ...(!equipmentModel.trim() ? ['Modelo do equipamento'] : []),
@@ -115,10 +124,12 @@ function App() {
         serialNumber: serialNumber.trim(),
         recipient: recipient.trim(),
         recipientEmail: recipientEmail.trim().toLowerCase(),
+        recipientCpf: normalizeCpf(recipientCpf),
         recipientDepartment: recipientDepartment.trim(),
-        equipment: selectedEquipment.name,
+        equipment: selectedEquipment.apiName,
         model: equipmentModel.trim(),
         brand: equipmentBrand.trim(),
+        accessories: accessories.trim(),
         parts: parts.map(({ id, label, status, note }) => ({
           id,
           label,
@@ -137,14 +148,19 @@ function App() {
 
   const handleLogin = (user: AuthUser) => {
     setUserEmail(user.email)
+    setUserName(user.name?.trim() || null)
     setUserRole(user.role)
     setActivePage('deliveries')
     setDeliveriesResetKey((prev) => prev + 1)
   }
 
   const logout = () => {
+    if (microsoftAuthEnabled) void logoutMicrosoft().catch(() => {
+      window.alert('Você saiu do checklist. Não foi possível encerrar a sessão na Microsoft.')
+    })
     logoutLocalSession()
     setUserEmail(null)
+    setUserName(null)
     setUserRole('operator')
     setActivePage('deliveries')
     setDeliveriesResetKey((prev) => prev + 1)
@@ -204,17 +220,9 @@ function App() {
               setDeliveriesResetKey((prev) => prev + 1)
             }}
           >
-            <ClipboardList size={17} /><span>Entregas</span>
+            <ClipboardList size={17} /><span>{userRole === 'admin' ? 'Entregas' : 'Minhas entregas'}</span>
           </button>
-          <button
-            type="button"
-            className={`side-nav-link ${activePage === 'checklist' ? 'side-nav-link-active' : ''}`}
-            aria-current={activePage === 'checklist' ? 'page' : undefined}
-            onClick={() => setActivePage('checklist')}
-          >
-            <ClipboardCheck size={17} /><span>Conferência</span>
-          </button>
-          <button
+          {!microsoftAuthEnabled && <button
             type="button"
             className="side-nav-link side-nav-security"
             aria-label="Alterar senha"
@@ -227,7 +235,7 @@ function App() {
             }}
           >
             <KeyRound size={17} /><span>Alterar senha</span>
-          </button>
+          </button>}
           {userRole === 'admin' && (
             <button
               type="button"
@@ -252,12 +260,14 @@ function App() {
           onSaveReturn={saveReturnInspection}
           onDeleteDelivery={deleteDelivery}
           isAdmin={userRole === 'admin'}
+          personalEmail={userRole === 'operator' ? userEmail : undefined}
+          personalName={userRole === 'operator' ? userName : undefined}
           hidden={activePage !== 'deliveries'}
         />
         {userRole === 'admin' && <DeletedDeliveriesPage hidden={activePage !== 'deleted'} />}
         {loading && <p role="status">Carregando entregas...</p>}
         {loadError && <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void refresh()}>Tentar carregar novamente</button></div>}
-        <main id="inicio" className="workspace" hidden={activePage !== 'checklist'}>
+        <main id="inicio" className="workspace" hidden={activePage !== 'checklist' || userRole !== 'admin'}>
         <section className="page-heading">
           <div>
             <div className="eyebrow"><span className="eyebrow-dot" /> RECEBIMENTO DE ATIVO</div>
@@ -302,8 +312,20 @@ function App() {
             <label className="data-field"><span>Número de série</span><input required value={serialNumber} onChange={(event) => { setSerialNumber(event.target.value); setRegistered(false) }} /></label>
             <label className="data-field recipient-field"><span>Responsável pelo recebimento</span><input required value={recipient} onChange={(event) => { setRecipient(event.target.value); setRegistered(false) }} /></label>
             <label className="data-field"><span>E-mail do responsável</span><input type="email" autoComplete="email" required value={recipientEmail} onChange={(event) => { setRecipientEmail(event.target.value); setRegistered(false) }} placeholder="exemplo@donatoholhos.com" /></label>
+            <label className="data-field">
+              <span>CPF do responsável</span>
+              <input required inputMode="numeric" maxLength={14} value={recipientCpf}
+                onChange={(event) => { setRecipientCpf(formatCpf(event.target.value)); setRegistered(false) }}
+                onBlur={() => setRecipientCpfTouched(true)}
+                placeholder="000.000.000-00" aria-invalid={showCpfError}
+                aria-describedby={showCpfError ? 'recipient-cpf-error' : undefined} />
+              {showCpfError && <small id="recipient-cpf-error" className="data-field-error" role="status">
+                {recipientCpf ? 'CPF inválido. Confira os 11 números informados.' : 'Informe o CPF do responsável.'}
+              </small>}
+            </label>
             <label className="data-field"><span>Setor do responsável</span><input required value={recipientDepartment} onChange={(event) => { setRecipientDepartment(event.target.value); setRegistered(false) }} placeholder="Ex.: Tecnologia da Informação" /></label>
             <div className="data-field date-field"><span>Data da entrega</span><div className="date-value">{new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(appStartDate)}</div></div>
+            <label className="data-field accessories-field"><span>Acessórios entregues</span><textarea value={accessories} onChange={(event) => { setAccessories(event.target.value); setRegistered(false) }} placeholder="Ex.: carregador, cabo HDMI, bolsa" rows={2} /></label>
           </div>
           <div className="delivery-footer">
             <div className={`delivery-summary ${damagedCount ? 'summary-warning' : ''}`}>

@@ -1,15 +1,25 @@
 import type { DeletedDeliveryAudit, DeliveryRecord, NewDelivery, ReturnInspectionRecord } from '../domain/deliveryTypes'
+import { microsoftAuthEnabled, getMicrosoftAccessToken } from './microsoftAuth'
 
 const tokenKey = 'donato-auth-token'
 export const getAuthToken = () => sessionStorage.getItem(tokenKey)
 export const setAuthToken = (token: string) => sessionStorage.setItem(tokenKey, token)
 export const clearAuthToken = () => sessionStorage.removeItem(tokenKey)
 
-type AuthResponse = { token: string; user: { email: string; role: 'admin' | 'operator' } }
+type AuthResponse = { token: string; user: { email: string; name?: string; role: 'admin' | 'operator' } }
 
 async function request<T>(path: string, method = 'GET', body?: unknown, authenticated = true): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  const token = getAuthToken()
+  let token = getAuthToken()
+  if (authenticated && microsoftAuthEnabled) {
+    try {
+      token = await getMicrosoftAccessToken()
+    } catch (error) {
+      clearAuthToken()
+      window.dispatchEvent(new Event('donato-session-expired'))
+      throw error
+    }
+  }
   if (authenticated && token) headers.Authorization = `Bearer ${token}`
   let response: Response
   try {
@@ -39,7 +49,9 @@ export async function apiLogin(email: string, password: string) {
   return data
 }
 export const apiChangePassword = (newPassword: string) => request<{ message: string }>('/auth/password', 'PATCH', { newPassword })
+export const apiGetProfile = () => request<{ user: AuthResponse['user'] }>('/auth/me')
 export const apiGetDeliveries = () => request<DeliveryRecord[]>('/deliveries')
+export const apiGetMyDeliveries = () => request<DeliveryRecord[]>('/deliveries/mine')
 export const apiGetDeletedDeliveries = () => request<DeletedDeliveryAudit[]>('/deliveries/deleted')
 export const apiCreateDelivery = (delivery: NewDelivery) => request<DeliveryRecord>('/deliveries', 'POST', delivery)
 export const apiSaveReturnInspection = (id: string, inspection: ReturnInspectionRecord) => request<DeliveryRecord>(`/deliveries/${id}/return`, 'PUT', inspection)

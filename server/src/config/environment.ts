@@ -1,3 +1,5 @@
+import { getMicrosoftConfig, isMicrosoftAuth } from './identity.js'
+
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET
   if (!secret || secret.length < 32 || /SUBSTITUA|secret$/i.test(secret)) {
@@ -7,10 +9,13 @@ export function getJwtSecret(): string {
 }
 
 export function validateEnvironment(): void {
-  getJwtSecret()
+  const microsoft = isMicrosoftAuth()
+  if (microsoft) getMicrosoftConfig()
+  else getJwtSecret()
   if (!process.env.MONGO_URI || /SUA_SENHA|<usuario>|<senha>/i.test(process.env.MONGO_URI)) {
     throw new Error('Configure MONGO_URI com uma conexão válida.')
   }
+  if (microsoft) return
   if (!process.env.ADMIN_EMAIL || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(process.env.ADMIN_EMAIL.trim())) {
     throw new Error('Configure ADMIN_EMAIL com um e-mail válido.')
   }

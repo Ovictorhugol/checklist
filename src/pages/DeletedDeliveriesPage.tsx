@@ -97,6 +97,7 @@ function DeletedDelivery({ audit }: { audit: DeletedDeliveryAudit }) {
         <Data label="Número de série" value={delivery.serialNumber} />
         <Data label="Responsável" value={delivery.recipient} />
         <Data label="E-mail do responsável" value={delivery.recipientEmail} />
+        <Data label="CPF do responsável" value={delivery.recipientCpf} />
         <Data label="Setor" value={delivery.recipientDepartment} />
         <Data label="Entregue por" value={delivery.deliveredBy} />
         <Data label="Data da entrega" value={formatDate(delivery.deliveredAt)} />

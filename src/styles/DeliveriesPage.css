@@ -308,29 +308,123 @@
 .return-save-button { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--accent-strong); background: var(--accent); color: #fff; }
 .return-save-button:disabled { border-color: #dce5ea; background: #e9eef1; color: #9aa7ae; cursor: not-allowed; }
 
+.loan-term-print-page { display: none; }
+.loan-term-document { display: flex; flex-direction: column; box-sizing: border-box; width: 194mm; min-height: 268mm; border: 1.5px solid #000; color: #000; background: #fff; font-family: Roboto, Arial, sans-serif; font-size: 8pt; line-height: 1.4; }
+.loan-term-header { display: grid; grid-template-columns: 30mm minmax(0, 1fr); min-height: 16mm; border-bottom: 1px solid #000; }
+.loan-term-brand { display: grid; place-items: center; align-content: center; gap: 1mm; border-right: 1px solid #000; }
+.loan-term-brand img { width: 21mm; height: 9mm; object-fit: contain; filter: grayscale(1) brightness(0); }
+.loan-term-brand strong { font-size: 7pt; letter-spacing: 3px; font-weight: 500; }
+.loan-term-title { display: grid; align-content: center; justify-items: center; gap: 1mm; padding: 2mm; }
+.loan-term-title h2 { margin: 0; color: #000; font-size: 12pt; font-weight: 800; text-align: center; }
+.loan-term-title small { font-size: 7pt; }
+.loan-term-section { min-width: 0; flex-shrink: 0; color: #000; overflow-wrap: anywhere; }
+.loan-term-section > h3 { display: flex; align-items: center; justify-content: space-between; margin: 0; padding: .7mm 2mm; border-bottom: 1px solid #000; background: #e6e6e6; color: #000; font-size: 7.5pt; font-weight: 700; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.loan-term-section + .loan-term-section { border-top: 1px solid #000; }
+.loan-term-fields { display: grid; gap: 1.5mm; padding: 1.5mm 2mm; }
+.loan-term-field { display: flex; align-items: baseline; gap: 2mm; min-width: 0; }
+.loan-term-field span { flex-shrink: 0; font-size: 7.5pt; font-weight: 700; }
+.loan-term-field strong { flex: 1; min-width: 0; min-height: 4mm; border-bottom: 1px solid #000; font-size: 8pt; font-weight: 500; overflow-wrap: anywhere; }
+.loan-term-recipient-row { display: grid; grid-template-columns: minmax(0, 1fr) 42mm; gap: 3mm; }
+.loan-term-product-row { display: grid; grid-template-columns: minmax(0, 1fr) 44mm; gap: 3mm; }
+.loan-term-accessory-check { display: grid; grid-template-columns: 23mm minmax(0, 1fr); gap: 2mm; min-height: 4mm; }
+.loan-term-accessory-check span { display: flex; align-items: center; gap: 1mm; font-size: 7pt; }
+.loan-term-accessory-check i { display: inline-grid; place-items: center; width: 3mm; height: 3mm; border: 1px solid #666; font-size: 8pt; font-style: normal; line-height: 1; }
+.loan-term-accessory-check > div { border-bottom: 1px solid #000; }
+.loan-term-prose { padding: 1.5mm 2mm; font-size: 8pt; }
+.loan-term-prose p { margin: 0; color: #000; line-height: 1.4; }
+.loan-term-prose ul { margin: 0; padding: 0; list-style: none; }
+.loan-term-prose li::before { content: '- '; }
+.loan-term-signatures { display: grid; grid-template-columns: minmax(0, 1fr) 38mm; gap: 6mm; padding: 8mm 2mm 1mm; margin-top: auto; }
+.loan-term-signatures > div { min-width: 0; display: grid; align-content: end; gap: 1mm; }
+.loan-term-signatures span { font-size: 7pt; font-weight: 700; }
+.loan-term-signatures i, .loan-term-signatures strong { min-height: 7mm; border-bottom: 1px solid #000; font-size: 8pt; font-weight: 400; text-align: center; }
+.loan-term-declaration { display: flex; flex-direction: column; min-height: 55mm; }
+.loan-term-return { display: flex; flex: 1; flex-direction: column; min-height: 58mm; }
+.loan-term-observations { display: grid; grid-template-columns: 23mm minmax(0, 1fr); gap: 2mm; align-items: baseline; padding: 7mm 2mm 0; }
+.loan-term-observations span { font-size: 7.5pt; font-weight: 700; }
+.loan-term-observations strong { min-height: 9mm; border-bottom: 1px solid #000; font-size: 8pt; font-weight: 400; white-space: pre-wrap; overflow-wrap: anywhere; }
+.loan-term-return .loan-term-signatures { padding-top: 4mm; }
+.loan-term-recipient-copy { border-top: 2px dashed #000 !important; }
+.loan-term-recipient-copy em { margin-left: 2mm; color: #d00000; font-size: 7pt; text-transform: none; }
+
 .history-empty { min-height: 260px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 30px; color: #7899b9; text-align: center; }
 .history-empty > strong { margin-top: 12px; color: #405048; font-size: 13px; font-weight: 650; }
 .history-empty > p { margin-top: 5px; color: #8c9891; font-size: 10px; }
 .history-empty > button { margin-top: 14px; padding: 7px 10px; border: 1px solid var(--accent-border); border-radius: 4px; color: var(--accent-strong); background: #f2f7fc; font: inherit; font-size: 10px; font-weight: 600; cursor: pointer; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 
+/* Mesmas dimensões usadas para medir o termo antes da impressão. */
+.loan-term-print-page[data-print-measuring] {
+  display: block !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: -10000px !important;
+  width: 194mm !important;
+  height: auto !important;
+  zoom: 1 !important;
+  visibility: hidden !important;
+}
+.loan-term-print-page[data-print-measuring] .loan-term-document {
+  position: static !important;
+  width: 194mm !important;
+  height: auto !important;
+  transform: none !important;
+  zoom: 1 !important;
+}
+
 @media print {
-  @page { size: A4; margin: 16mm; }
-  body, #root, .app-shell, .page-area { min-height: 0 !important; background: #fff !important; }
-  .side-nav, .workspace, .page-footer, .delivery-view-toolbar, .delivery-readonly-notice, .return-start-button, .return-actions { display: none !important; }
-  .app-shell { display: block !important; }
-  .delivery-page, .history-page { width: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: #fff !important; }
-  .delivery-view { display: block !important; padding: 0 !important; color: #17212b; }
-  .delivery-view-heading { margin: 0 0 16px !important; }
-  .delivery-view-heading h1 { font-size: 22px; }
-  .delivery-view-meta { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; break-inside: avoid; }
-  .delivery-view-meta > div { min-height: 60px; border-bottom: 1px solid #dfe5e8 !important; }
-  .delivery-view-inspection { margin-top: 22px; }
-  .delivery-view-parts { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-  .delivery-view-part { break-inside: avoid; }
-  .return-inspection-item { break-inside: avoid; }
-  .delivery-view-part-damaged { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-  .delivery-view-part p { color: #46535d; }
+  @page { size: A4 portrait; margin: 8mm; }
+  html, body, #root, .app-shell, .page-area, .history-page, .delivery-view {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  body > :not(#root),
+  .app-shell > :not(.page-area),
+  .page-area > :not(.history-page),
+  .history-page > :not(.delivery-view),
+  .delivery-view > :not(.loan-term-print-page) { display: none !important; }
+  [hidden] { display: none !important; }
+  .loan-term-print-page {
+    display: block !important;
+    position: relative;
+    width: 194mm;
+    height: 269mm;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .loan-term-document {
+    display: flex !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: calc(194mm / var(--loan-term-print-scale, 1));
+    height: auto;
+    min-height: 268mm;
+    margin: 0;
+    overflow: visible;
+    transform: none;
+    zoom: var(--loan-term-print-scale, 1);
+    color: #000 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .loan-term-header, .loan-term-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .loan-term-header { flex-shrink: 0; }
 }
 
 @media (min-width: 1600px) {

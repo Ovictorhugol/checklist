@@ -13,6 +13,7 @@ export type EquipmentId = 'notebook' | 'desktop' | 'phone' | 'monitor'
 export type EquipmentDefinition = {
   id: EquipmentId
   name: string
+  apiName: string
   modelLabel: string
   parts: Omit<EquipmentPart, 'status' | 'note'>[]
 }
@@ -20,7 +21,8 @@ export type EquipmentDefinition = {
 export const equipmentCatalog: EquipmentDefinition[] = [
   {
     id: 'notebook',
-    name: 'Notebook Dell Latitude 5440',
+    name: 'Notebook',
+    apiName: 'Notebook Dell Latitude 5440',
     modelLabel: 'DELL LATITUDE 5440',
     parts: [
       { id: 'display', label: 'Tela e moldura', detail: 'Painel, vidro e dobradiças' },
@@ -32,7 +34,8 @@ export const equipmentCatalog: EquipmentDefinition[] = [
   },
   {
     id: 'desktop',
-    name: 'Computador Dell OptiPlex 3000',
+    name: 'Desktop',
+    apiName: 'Computador Dell OptiPlex 3000',
     modelLabel: 'DELL OPTIPLEX 3000',
     parts: [
       { id: 'case', label: 'Gabinete', detail: 'Tampa, estrutura e ventilação' },
@@ -43,7 +46,8 @@ export const equipmentCatalog: EquipmentDefinition[] = [
   },
   {
     id: 'phone',
-    name: 'Celular Samsung Galaxy A36',
+    name: 'Celular',
+    apiName: 'Celular Samsung Galaxy A36',
     modelLabel: 'GALAXY A36',
     parts: [
       { id: 'display', label: 'Tela', detail: 'Vidro, painel e toque' },
@@ -55,7 +59,8 @@ export const equipmentCatalog: EquipmentDefinition[] = [
   },
   {
     id: 'monitor',
-    name: 'Monitor Dell P2222H',
+    name: 'Monitor',
+    apiName: 'Monitor Dell P2222H',
     modelLabel: 'DELL P2222H',
     parts: [
       { id: 'display', label: 'Tela', detail: 'Painel, pixels e superfície' },

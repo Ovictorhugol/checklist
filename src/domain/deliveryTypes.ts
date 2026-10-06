@@ -28,10 +28,12 @@ export type DeliveryRecord = {
   serialNumber: string
   recipient: string
   recipientEmail?: string
+  recipientCpf?: string
   recipientDepartment?: string
   equipment: string
   model?: string
   brand?: string
+  accessories?: string
   status?: DeliveryStatus
   isReturned?: boolean
   returnedAt?: string
@@ -56,9 +58,17 @@ export type NewDelivery = Omit<DeliveryRecord, 'id' | 'protocol' | 'deliveredAt'
   model: string
   brand: string
   recipientEmail: string
+  recipientCpf: string
   recipientDepartment: string
 }
 
 export function isDeliveryReturned(delivery: DeliveryRecord): boolean {
   return delivery.status === 'devolvido' || delivery.isReturned === true || !!delivery.returnInspection
+}
+
+export function getDeliveryDamageCount(delivery: DeliveryRecord): number {
+  if (delivery.returnInspection) {
+    return delivery.returnInspection.parts.filter((part) => part.returnedStatus === 'damaged').length
+  }
+  return delivery.parts.filter((part) => part.status === 'damaged').length
 }

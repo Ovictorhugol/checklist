@@ -3,10 +3,12 @@ import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
 import { User } from '../models/User.js'
 import { validateEnvironment } from '../config/environment.js'
+import { isMicrosoftAuth } from '../config/identity.js'
 
 dotenv.config()
 
 async function main(): Promise<void> {
+  if (isMicrosoftAuth()) throw new Error('Administradores e senhas são gerenciados no Entra ID neste modo.')
   const mode = process.argv[2]
   if (mode !== '--check' && mode !== '--reset') throw new Error('Use --check ou --reset.')
   validateEnvironment()

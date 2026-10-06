@@ -14,10 +14,14 @@ import {
 import {
   type DeliveryRecord,
   isDeliveryReturned,
+  getDeliveryDamageCount,
   type ReturnInspectionPart,
   type ReturnInspectionRecord,
 } from '../domain/deliveryTypes'
 import '../styles/DeliveriesPage.css'
+import LoanTermDocument from '../components/LoanTermDocument'
+import { printLoanTermDocument } from '../services/printLoanTerm'
+import { formatCpf } from '../domain/cpf'
 
 type DeliveriesPageProps = {
   deliveries: DeliveryRecord[]
@@ -25,6 +29,8 @@ type DeliveriesPageProps = {
   onSaveReturn: (deliveryId: string, inspection: ReturnInspectionRecord) => Promise<DeliveryRecord>
   onDeleteDelivery: (deliveryId: string) => Promise<void>
   isAdmin: boolean
+  personalEmail?: string
+  personalName?: string | null
   hidden: boolean
 }
 
@@ -39,7 +45,7 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
   minute: '2-digit',
 })
 
-function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDelivery, isAdmin, hidden }: DeliveriesPageProps) {
+function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDelivery, isAdmin, personalEmail, personalName, hidden }: DeliveriesPageProps) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [damageFilter, setDamageFilter] = useState<DamageFilter>('all')
@@ -54,7 +60,7 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
 
   const inPossessionCount = deliveries.filter((delivery) => !isDeliveryReturned(delivery)).length
   const returnedCount = deliveries.filter((delivery) => isDeliveryReturned(delivery)).length
-  const damagedDeliveries = deliveries.filter((delivery) => delivery.parts.some((part) => part.status === 'damaged')).length
+  const damagedDeliveries = deliveries.filter((delivery) => getDeliveryDamageCount(delivery) > 0).length
 
   const visibleDeliveries = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('pt-BR')
@@ -66,7 +72,7 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
           statusFilter === 'all' ||
           (statusFilter === 'in_possession' ? !returned : returned)
 
-        const hasDamage = delivery.parts.some((part) => part.status === 'damaged')
+        const hasDamage = getDeliveryDamageCount(delivery) > 0
         const matchesDamage =
           damageFilter === 'all' ||
           (damageFilter === 'damaged' ? hasDamage : !hasDamage)
@@ -148,8 +154,8 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
             <button className="delivery-back-button" type="button" disabled={returnBusy} onClick={() => setSelectedDelivery(null)}>
               <ArrowLeft size={15} /> Voltar às entregas
             </button>
-            <button className="delivery-print-button" type="button" onClick={() => window.print()}>
-              <Printer size={15} /> Imprimir / salvar PDF
+            <button className="delivery-print-button" type="button" onClick={() => void printLoanTermDocument()}>
+              <Printer size={15} /> Imprimir termo
             </button>
           </div>
 
@@ -192,10 +198,11 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
             <div><span>Número de série</span><strong>{selectedDelivery.serialNumber || 'Não informado'}</strong></div>
             <div><span>Responsável pelo recebimento</span><strong>{selectedDelivery.recipient}</strong></div>
             <div><span>E-mail do responsável</span><strong>{selectedDelivery.recipientEmail || 'Não informado'}</strong></div>
+            <div><span>CPF do responsável</span><strong>{selectedDelivery.recipientCpf ? formatCpf(selectedDelivery.recipientCpf) : 'Não informado'}</strong></div>
             <div><span>Setor do responsável</span><strong>{selectedDelivery.recipientDepartment || 'Não informado'}</strong></div>
           </section>
 
-          {!isDeliveryReturned(selectedDelivery) && !isReturnInspection && (
+          {isAdmin && !isDeliveryReturned(selectedDelivery) && !isReturnInspection && (
             <button className="return-start-button" type="button" onClick={beginReturnInspection}>
               <ClipboardList size={15} /> Conferir e registrar devolução
             </button>
@@ -327,18 +334,19 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
           <div className="delivery-readonly-notice">
             <ShieldCheck size={15} /> Registro histórico com sincronização MongoDB
           </div>
+          <LoanTermDocument delivery={selectedDelivery} />
         </section>
       ) : (
         <>
           <section className="history-heading">
             <div>
               <div className="eyebrow"><span className="eyebrow-dot" /> CONTROLE DE ATIVOS</div>
-              <h1>Entregas realizadas</h1>
-              <p>Histórico completo de equipamentos entregues e devoluções ao hospital.</p>
+              <h1>{personalEmail ? 'Minhas entregas' : 'Entregas realizadas'}</h1>
+              <p>{personalEmail ? `Equipamentos entregues para ${personalName || personalEmail} e histórico de devoluções.` : 'Histórico completo de equipamentos entregues e devoluções ao hospital.'}</p>
             </div>
-            <button className="history-new-button" type="button" onClick={onNewDelivery}>
+            {isAdmin && <button className="history-new-button" type="button" onClick={onNewDelivery}>
               <ClipboardList size={16} /> Nova conferência
-            </button>
+            </button>}
           </section>
 
           {/* Cards de Métricas em 4 colunas */}
@@ -365,7 +373,7 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
             <div className="history-tools">
               <div className="history-tools-title">
                 <div className="section-kicker">REGISTROS</div>
-                <h2 id="history-list-title">Todas as entregas <span>{visibleDeliveries.length}</span></h2>
+                <h2 id="history-list-title">{personalEmail ? 'Minhas entregas' : 'Todas as entregas'} <span>{visibleDeliveries.length}</span></h2>
               </div>
 
               {/* Abas para separar Em posse vs Devolvidos */}
@@ -435,7 +443,7 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
                   </thead>
                   <tbody>
                     {visibleDeliveries.map((delivery) => {
-                      const damageCount = delivery.parts.filter((part) => part.status === 'damaged').length
+                      const damageCount = getDeliveryDamageCount(delivery)
                       return (
                         <DeliveryRows
                           key={delivery.id}
@@ -472,7 +480,7 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
                     ? 'Quando uma conferência de devolução for realizada, o registro constará nesta lista.'
                     : 'Altere a busca ou os filtros para visualizar outros registros.'}
                 </p>
-                {!deliveries.length && <button type="button" onClick={onNewDelivery}>Iniciar uma conferência</button>}
+                {!deliveries.length && isAdmin && <button type="button" onClick={onNewDelivery}>Iniciar uma conferência</button>}
               </div>
             )}
           </section>

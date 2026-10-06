@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { User } from '../models/User.js'
 import type { AuthRequest } from '../middleware/authMiddleware.js'
+import { isMicrosoftAuth } from '../config/identity.js'
 
 function generateToken(userId: string, email: string, role: string) {
   const secret = getJwtSecret()
@@ -97,6 +98,10 @@ export async function getProfile(req: AuthRequest, res: Response): Promise<void>
       return
     }
 
+    if (isMicrosoftAuth()) {
+      res.status(200).json({ user: req.user })
+      return
+    }
     const user = await User.findById(req.user.id)
     if (!user) {
       res.status(404).json({ error: 'Usuário não encontrado' })

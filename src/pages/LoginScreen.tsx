@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
-import { authenticateLocalAccount, type AuthUser } from '../services/auth'
+import { authenticateLocalAccount, authenticateMicrosoftAccount, type AuthUser } from '../services/auth'
+import { microsoftAuthEnabled } from '../services/microsoftAuth'
 import '../styles/LoginScreen.css'
 
 type LoginScreenProps = {
@@ -14,6 +15,7 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const microsoftLoginBusy = useRef(false)
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -24,6 +26,21 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Não foi possível entrar.')
     } finally {
+      setBusy(false)
+    }
+  }
+
+  const signInMicrosoft = async () => {
+    if (microsoftLoginBusy.current) return
+    microsoftLoginBusy.current = true
+    setError('')
+    setBusy(true)
+    try {
+      onLogin(await authenticateMicrosoftAccount())
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Não foi possível entrar com a Microsoft.')
+    } finally {
+      microsoftLoginBusy.current = false
       setBusy(false)
     }
   }
@@ -40,6 +57,15 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
           <h1 id="login-title">{createAccount ? 'Criar acesso' : 'Acesse sua conta'}</h1>
           <p>{createAccount ? 'Cadastre sua conta para acessar o sistema.' : 'Entre para continuar a conferência dos equipamentos.'}</p>
         </div>
+        {microsoftAuthEnabled ? (
+          <div className="login-form">
+            <p>Use sua conta Microsoft corporativa para acessar o sistema.</p>
+            {error && <p className="login-error" role="alert">{error}</p>}
+            <button className="login-submit" type="button" disabled={busy} onClick={() => void signInMicrosoft()}>
+              {busy ? 'Aguarde...' : 'Entrar com Microsoft'} <ArrowRight size={16} />
+            </button>
+          </div>
+        ) : <>
         <div className="login-tabs" role="tablist" aria-label="Acesso">
           <button type="button" role="tab" aria-selected={!createAccount} className={!createAccount ? 'login-tab-active' : ''} onClick={() => { setCreateAccount(false); setError('') }}>Entrar</button>
           <button type="button" role="tab" aria-selected={createAccount} className={createAccount ? 'login-tab-active' : ''} onClick={() => { setCreateAccount(true); setError('') }}>Criar conta</button>
@@ -50,6 +76,7 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
           {error && <p className="login-error" role="alert">{error}</p>}
           <button className="login-submit" type="submit" disabled={busy}>{busy ? 'Aguarde...' : createAccount ? 'Criar conta' : 'Entrar'} <ArrowRight size={16} /></button>
         </form>
+        </>}
       </section>
     </main>
   )

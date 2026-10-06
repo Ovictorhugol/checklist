@@ -105,10 +105,12 @@ test('cadastro ignora protocolo do cliente e registra autor autenticado', async 
   let stored: any
   Delivery.create = (async (input: any) => { stored = input; return { toJSON: () => input } }) as any
   const res = response()
-  await createDelivery({ body: { equipment, parts, assetTag: 'A', serialNumber: 'S', recipient: 'R', recipientEmail: 'r@example.com', recipientDepartment: 'TI', model: 'M', brand: 'B', protocol: 'forged' }, user: { email: 'operator@example.com' } } as any, res as any)
+  await createDelivery({ body: { equipment, parts, assetTag: 'A', serialNumber: 'S', recipient: 'R', recipientEmail: 'r@example.com', recipientCpf: '529.982.247-25', recipientDepartment: 'TI', model: 'M', brand: 'B', accessories: 'Carregador', protocol: 'forged' }, user: { email: 'operator@example.com' } } as any, res as any)
   assert.equal(res.code, 201)
   assert.equal(stored.protocol, `ENT-${new Date().getFullYear()}-0042`)
   assert.equal(stored.deliveredBy, 'operator@example.com')
+  assert.equal(stored.accessories, 'Carregador')
+  assert.equal(stored.recipientCpf, '52998224725')
 })
 
 test('devolução repetida ou perdedora de corrida retorna conflito', async () => {

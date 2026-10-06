@@ -5,8 +5,17 @@ import type { ClientSession } from 'mongoose'
 import { Delivery } from '../models/Delivery.js'
 import { DeliveryDeletionAudit } from '../models/DeliveryDeletionAudit.js'
 import type { AuthRequest } from '../middleware/authMiddleware.js'
+import { isValidCpf, normalizeCpf } from '../domain/cpf.js'
 
 export async function getAllDeliveries(req: AuthRequest, res: Response): Promise<void> {
+  return listDeliveries(req, res, req.user?.role !== 'admin')
+}
+
+export async function getMyDeliveries(req: AuthRequest, res: Response): Promise<void> {
+  return listDeliveries(req, res, true)
+}
+
+async function listDeliveries(req: AuthRequest, res: Response, personal: boolean): Promise<void> {
   try {
     const { status } = req.query
     let filter: Record<string, any> = {}
@@ -29,6 +38,13 @@ export async function getAllDeliveries(req: AuthRequest, res: Response): Promise
       }
     }
 
+    if (personal) {
+      if (!req.user?.email) {
+        res.status(401).json({ error: 'Não autenticado.' })
+        return
+      }
+      filter.recipientEmail = req.user.email.trim().toLowerCase()
+    }
     const deliveries = await Delivery.find(filter).sort({ createdAt: -1 })
     res.status(200).json(deliveries.map((item) => item.toJSON()))
   } catch (error) {
@@ -81,7 +97,8 @@ export async function getDeliveryById(req: AuthRequest, res: Response): Promise<
     const { id } = req.params
     const delivery = await Delivery.findById(id)
 
-    if (!delivery) {
+    if (!delivery || (req.user?.role !== 'admin' &&
+      delivery.recipientEmail?.trim().toLowerCase() !== req.user?.email.trim().toLowerCase())) {
       res.status(404).json({ error: 'Conferência não encontrada.' })
       return
     }
@@ -100,10 +117,12 @@ export async function createDelivery(req: AuthRequest, res: Response): Promise<v
       serialNumber,
       recipient,
       recipientEmail,
+      recipientCpf,
       recipientDepartment,
       equipment,
       model,
       brand,
+      accessories,
       parts,
     } = req.body
 
@@ -112,6 +131,10 @@ export async function createDelivery(req: AuthRequest, res: Response): Promise<v
       return
     }
 
+    if (!isValidCpf(recipientCpf)) {
+      res.status(400).json({ error: 'Informe um CPF válido para o responsável.' })
+      return
+    }
     const normalizedRecipientEmail = String(recipientEmail).trim().toLowerCase()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedRecipientEmail)) {
       res.status(400).json({ error: 'Informe um e-mail válido para o responsável.' })
@@ -133,10 +156,12 @@ export async function createDelivery(req: AuthRequest, res: Response): Promise<v
       serialNumber,
       recipient,
       recipientEmail: normalizedRecipientEmail,
+      recipientCpf: normalizeCpf(recipientCpf),
       recipientDepartment,
       equipment,
       model,
       brand,
+      accessories: typeof accessories === 'string' ? accessories.trim() : '',
       status: 'entregue',
       isReturned: false,
       deliveredAt: new Date().toISOString(),
