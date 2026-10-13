@@ -54,6 +54,13 @@ export const apiGetProfile = () => request<{ user: AuthResponse['user'] }>('/aut
 export const apiGetDeliveries = () => request<DeliveryRecord[]>('/deliveries')
 export const apiGetMyDeliveries = () => request<DeliveryRecord[]>('/deliveries/mine')
 export const apiGetDeletedDeliveries = () => request<DeletedDeliveryAudit[]>('/deliveries/deleted')
+export const apiRestoreDelivery = (auditId: string) => request<DeliveryRecord>(`/deliveries/deleted/${auditId}/restore`, 'POST')
+export type DeliveryEmailState = {
+  enabled: boolean
+  job: null | { status: 'pending' | 'processing' | 'accepted' | 'failed' | 'review'; recipientEmail: string; attempts: number; acceptedAt?: string; lastError?: string }
+}
+export const apiGetDeliveryEmail = (id: string, type: 'delivery' | 'return' = 'delivery') => request<DeliveryEmailState>(`/deliveries/${id}/email?type=${type}`)
+export const apiRetryDeliveryEmail = (id: string, type: 'delivery' | 'return' = 'delivery') => request<{ message: string }>(`/deliveries/${id}/email/retry?type=${type}`, 'POST')
 export const apiCreateDelivery = (delivery: NewDelivery) => request<DeliveryRecord>('/deliveries', 'POST', delivery)
 export const apiSaveReturnInspection = (id: string, inspection: ReturnInspectionInput) => request<DeliveryRecord>(`/deliveries/${id}/return`, 'PUT', inspection)
 export const apiDeleteDelivery = (id: string) => request<{ message: string }>(`/deliveries/${id}`, 'DELETE')

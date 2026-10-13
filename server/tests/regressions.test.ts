@@ -8,7 +8,7 @@ import { validateDeliveryParts, validateReturnParts } from '../src/domain/inspec
 import { Delivery } from '../src/models/Delivery.js'
 import { DeliveryDeletionAudit } from '../src/models/DeliveryDeletionAudit.js'
 import { ProtocolCounter } from '../src/models/ProtocolCounter.js'
-import { initializeProtocolCounters, allocateProtocol } from '../src/services/protocol.js'
+import { initializeProtocolCounters, allocateProtocol, protocolDate } from '../src/services/protocol.js'
 import { createDelivery, saveReturnInspection } from '../src/controllers/deliveryController.js'
 
 const signature = { signerName: 'R', strokes: [[{ x: 10, y: 50 }, { x: 150, y: 90 }]] }
@@ -35,14 +35,14 @@ test('todas as rotas bloqueiam ausência, invalidez e expiração de JWT; operad
   const base = `http://127.0.0.1:${address.port}/api/deliveries`
   const expired = jwt.sign({ id: delivery._id, email: 'operator@example.com', role: 'operator' }, secret, { expiresIn: -1 })
   try {
-    for (const [method, path] of [['GET', ''], ['GET', '/next-protocol'], ['GET', '/deleted'], ['GET', `/${delivery._id}`], ['POST', ''], ['PUT', `/${delivery._id}/return`], ['DELETE', `/${delivery._id}`]]) {
+    for (const [method, path] of [['GET', ''], ['GET', '/next-protocol'], ['GET', '/deleted'], ['GET', `/${delivery._id}`], ['POST', ''], ['PUT', `/${delivery._id}/return`], ['DELETE', `/${delivery._id}`], ['POST', `/deleted/${delivery._id}/restore`], ['GET', `/${delivery._id}/email`], ['POST', `/${delivery._id}/email/retry`]]) {
       for (const token of [null, 'invalid', expired]) {
         const result = await fetch(base + path, { method, headers: token ? { Authorization: `Bearer ${token}` } : {} })
         assert.equal(result.status, 401, `${method} ${path}`)
       }
     }
     const token = jwt.sign({ id: delivery._id, email: 'operator@example.com', role: 'operator' }, secret)
-    for (const [method, path] of [['GET', '/deleted'], ['DELETE', `/${delivery._id}`]]) {
+    for (const [method, path] of [['GET', '/deleted'], ['DELETE', `/${delivery._id}`], ['POST', `/deleted/${delivery._id}/restore`], ['GET', `/${delivery._id}/email`], ['POST', `/${delivery._id}/email/retry`]]) {
       assert.equal((await fetch(base + path, { method, headers: { Authorization: `Bearer ${token}` } })).status, 403)
     }
   } finally {
@@ -98,7 +98,7 @@ test('reserva de protocolo usa operação atômica e propaga falhas do PostgreSQ
     assert.equal(options.upsert, true)
     return { sequence: 2 }
   }) as any
-  assert.equal(await allocateProtocol(), `ENT-${new Date().getFullYear()}-0002`)
+  assert.equal(await allocateProtocol(), `ENT-${protocolDate()}-0002`)
   assert.equal(calls, 1)
   const failure = Object.assign(new Error('connection lost'), { code: '08006' })
   ProtocolCounter.findOneAndUpdate = (async () => { throw failure }) as any
@@ -112,7 +112,7 @@ test('cadastro ignora protocolo do cliente e registra autor autenticado', async 
   const res = response()
   await createDelivery({ body: { equipment, parts, assetTag: 'A', serialNumber: 'S', recipient: 'R', recipientEmail: 'r@example.com', recipientCpf: '529.982.247-25', recipientDepartment: 'TI', model: 'M', brand: 'B', accessories: 'Carregador', signature, protocol: 'forged' }, user: { email: 'operator@example.com' } } as any, res as any)
   assert.equal(res.code, 201)
-  assert.equal(stored.protocol, `ENT-${new Date().getFullYear()}-0042`)
+  assert.equal(stored.protocol, `ENT-${protocolDate(new Date(stored.deliveredAt))}-0042`)
   assert.equal(stored.deliveredBy, 'operator@example.com')
   assert.equal(stored.accessories, 'Carregador')
   assert.equal(stored.recipientCpf, '52998224725')

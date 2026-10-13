@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Archive, CircleAlert, RefreshCw, ShieldCheck } from 'lucide-react'
-import { apiGetDeletedDeliveries } from '../services/api'
+import { Archive, CircleAlert, RefreshCw, ShieldCheck, RotateCcw, CheckCircle2 } from 'lucide-react'
+import { apiGetDeletedDeliveries, apiRestoreDelivery } from '../services/api'
 import type { DeletedDeliveryAudit, DeliveryRecord } from '../domain/deliveryTypes'
 import '../styles/DeletedDeliveriesPage.css'
 
@@ -18,10 +18,27 @@ function formatDate(value?: string) {
   return Number.isNaN(date.getTime()) ? 'Não informado' : dateFormatter.format(date)
 }
 
-function DeletedDeliveriesPage({ hidden }: { hidden: boolean }) {
+function DeletedDeliveriesPage({ hidden, onRestored }: { hidden: boolean; onRestored: () => Promise<void> }) {
   const [audits, setAudits] = useState<DeletedDeliveryAudit[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [restoringId, setRestoringId] = useState<string | null>(null)
+  const [success, setSuccess] = useState('')
+
+  const restore = async (audit: DeletedDeliveryAudit) => {
+    if (restoringId || !audit.canRestore || !window.confirm(`Recuperar a entrega ${audit.deliverySnapshot.protocol} com os dados originais?`)) return
+    setRestoringId(audit.id)
+    setError('')
+    setSuccess('')
+    try {
+      const delivery = await apiRestoreDelivery(audit.id)
+      setSuccess(`Entrega ${delivery.protocol} recuperada. Ela está disponível em Entregas.`)
+      await onRestored()
+      await loadAudits()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Não foi possível recuperar a entrega.')
+    } finally { setRestoringId(null) }
+  }
 
   const loadAudits = async () => {
     setLoading(true)
@@ -53,12 +70,13 @@ function DeletedDeliveriesPage({ hidden }: { hidden: boolean }) {
           <h1>Entregas excluídas</h1>
           <p>Arquivo das entregas removidas, com os dados originais e o registro da exclusão.</p>
         </div>
-        <button className="deleted-refresh" type="button" onClick={() => void loadAudits()} disabled={loading} aria-label="Atualizar histórico" title="Atualizar histórico">
+        <button className="deleted-refresh" type="button" onClick={() => void loadAudits()} disabled={loading || !!restoringId} aria-label="Atualizar histórico" title="Atualizar histórico">
           <RefreshCw size={16} /> Atualizar
         </button>
       </header>
 
       {error && <div className="deleted-feedback deleted-feedback-error" role="alert"><CircleAlert size={16} />{error}</div>}
+      {success && <div className="deleted-feedback deleted-feedback-success" role="status"><CheckCircle2 size={16} />{success}</div>}
       {loading ? (
         <div className="deleted-empty">Carregando histórico...</div>
       ) : !audits.length ? (
@@ -66,7 +84,7 @@ function DeletedDeliveriesPage({ hidden }: { hidden: boolean }) {
       ) : (
         <section className="deleted-list" aria-label="Histórico de entregas excluídas">
           {audits.map((audit) => (
-            <DeletedDelivery key={audit.id} audit={audit} />
+            <DeletedDelivery key={audit.id} audit={audit} onRestore={() => void restore(audit)} restoring={restoringId === audit.id} busy={!!restoringId} />
           ))}
         </section>
       )}
@@ -75,7 +93,7 @@ function DeletedDeliveriesPage({ hidden }: { hidden: boolean }) {
   )
 }
 
-function DeletedDelivery({ audit }: { audit: DeletedDeliveryAudit }) {
+function DeletedDelivery({ audit, onRestore, restoring, busy }: { audit: DeletedDeliveryAudit; onRestore: () => void; restoring: boolean; busy: boolean }) {
   const delivery = audit.deliverySnapshot
 
   return (
@@ -86,8 +104,15 @@ function DeletedDelivery({ audit }: { audit: DeletedDeliveryAudit }) {
           <h2>{delivery.protocol || 'Protocolo indisponível'}</h2>
           <p>Excluída em {formatDate(audit.deletedAt)} por <strong>{audit.deletedByEmail}</strong> ({audit.deletedByUserId})</p>
         </div>
-        <span className="deleted-audit-badge"><Archive size={13} /> Arquivada</span>
+        <div className="deleted-record-actions">
+          <span className="deleted-audit-badge">{audit.restoredAt ? <CheckCircle2 size={13} /> : <Archive size={13} />}{audit.restoredAt ? 'Recuperada' : 'Arquivada'}</span>
+          {!audit.restoredAt && <button type="button" className="deleted-refresh" disabled={!audit.canRestore || busy} onClick={onRestore}>
+            <RotateCcw size={15} />{restoring ? 'Recuperando...' : 'Recuperar entrega'}
+          </button>}
+        </div>
       </header>
+      {audit.restoredAt && <p className="deleted-restoration-note">Recuperada em {formatDate(audit.restoredAt)} por {audit.restoredByEmail}.</p>}
+      {!audit.restoredAt && !audit.canRestore && <p className="deleted-restoration-note">Registro antigo sem dados completos para recuperação.</p>}
 
       <section className="deleted-data-grid" aria-label="Dados da entrega arquivada">
         <Data label="Equipamento" value={delivery.equipment} />

@@ -3,8 +3,8 @@ import { statusText, type EquipmentPart, type InspectionStatus } from '../domain
 
 type InspectionPanelProps = {
   parts: EquipmentPart[]
-  selectedPart: EquipmentPart
-  selectedPartId: string
+  selectedPart: EquipmentPart | undefined
+  selectedPartId: string | null
   inspectedCount: number
   onSelectPart: (partId: string) => void
   onInspectPart: (status: Exclude<InspectionStatus, 'pending'>) => void
@@ -51,7 +51,7 @@ function InspectionPanel({
         ))}
       </div>
 
-      <div className="part-inspector">
+      {selectedPart ? <div className="part-inspector">
         <div className="inspector-heading">
           <div><span className="inspector-label">PEÇA SELECIONADA</span><h3>{selectedPart.label}</h3></div>
           <span className={`inspector-status status-${selectedPart.status}`}><i />{statusText[selectedPart.status]}</span>
@@ -70,7 +70,7 @@ function InspectionPanel({
             <textarea value={selectedPart.note} onChange={(event) => onUpdateNote(event.target.value)} placeholder="Descreva o dano observado..." rows={2} />
           </label>
         )}
-      </div>
+      </div> : <p className="completion-hint">Selecione uma peça para inspecionar.</p>}
     </aside>
   )
 }

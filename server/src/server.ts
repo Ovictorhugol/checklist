@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { connectDB } from './config/db.js'
+import { getPool } from './config/postgres.js'
 import { ensureAdminUser } from './config/seedAdmin.js'
 import authRoutes from './routes/authRoutes.js'
 import deliveryRoutes from './routes/deliveryRoutes.js'
@@ -13,6 +14,8 @@ import { Delivery } from './models/Delivery.js'
 import { User } from './models/User.js'
 import { ProtocolCounter } from './models/ProtocolCounter.js'
 import { isMicrosoftAuth } from './config/identity.js'
+import { getMailConfig, mailEnabled } from './config/mail.js'
+import { startDeliveryEmailWorker } from './services/deliveryEmail.js'
 
 dotenv.config()
 
@@ -40,6 +43,7 @@ app.get('/api/health', (_req, res) => {
 // Iniciar servidor e conexão com o PostgreSQL/RDS
 async function startServer() {
   validateEnvironment()
+  if (mailEnabled()) getMailConfig()
   await connectDB()
   await Promise.all([Delivery.init(), ProtocolCounter.init(), Reservation.init()])
   if (!isMicrosoftAuth()) {
@@ -47,6 +51,10 @@ async function startServer() {
     await ensureAdminUser()
   }
   await initializeProtocolCounters()
+  if (mailEnabled()) {
+    await getPool().query('SELECT event_type FROM checklist_donato.delivery_email_jobs LIMIT 0')
+    startDeliveryEmailWorker()
+  }
 
   app.listen(PORT, () => {
     console.log(`\n🚀 Servidor rodando na porta ${PORT}`)

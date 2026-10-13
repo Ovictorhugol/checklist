@@ -9,6 +9,8 @@ import { Delivery } from '../models/Delivery.js'
 import { DeliveryDeletionAudit } from '../models/DeliveryDeletionAudit.js'
 import type { AuthRequest } from '../middleware/authMiddleware.js'
 import { isValidCpf, normalizeCpf } from '../domain/cpf.js'
+import { restoreArchivedDelivery, DeliveryRestoreError, isRestorableSnapshot } from '../services/restoreDelivery.js'
+import { equipmentPossessionError } from '../services/equipmentPossession.js'
 
 export async function getAllDeliveries(req: AuthRequest, res: Response): Promise<void> {
   return listDeliveries(req, res, req.user?.role !== 'admin')
@@ -67,6 +69,7 @@ export async function getDeletedDeliveries(req: AuthRequest, res: Response): Pro
     res.status(200).json(audits.map((audit) => ({
       ...audit,
       id: audit._id.toString(),
+      canRestore: !audit.restoredAt && isRestorableSnapshot(audit.deliverySnapshot),
       deliverySnapshot: audit.deliverySnapshot ?? {
         id: audit.deliveryId,
         protocol: audit.protocol || '',
@@ -163,7 +166,8 @@ export async function createDelivery(req: AuthRequest, res: Response): Promise<v
       res.status(400).json({ error: (error as Error).message })
       return
     }
-    const protocol = await allocateProtocol()
+    const deliveredAt = new Date()
+    const protocol = await allocateProtocol(deliveredAt)
 
     const details = {
       protocol,
@@ -179,7 +183,7 @@ export async function createDelivery(req: AuthRequest, res: Response): Promise<v
       accessories: typeof accessories === 'string' ? accessories.trim() : '',
       status: 'entregue',
       isReturned: false,
-      deliveredAt: new Date().toISOString(),
+      deliveredAt: deliveredAt.toISOString(),
       deliveredBy: req.user?.email || 'Sistema',
       parts: validatedParts,
     }
@@ -189,6 +193,8 @@ export async function createDelivery(req: AuthRequest, res: Response): Promise<v
     res.status(201).json(newDelivery.toJSON())
   } catch (error) {
     if (error instanceof ReservationDeliveryConflict) { res.status(409).json({ error: error.message }); return }
+    const possessionError = equipmentPossessionError(error)
+    if (possessionError) { res.status(409).json({ error: possessionError }); return }
     console.error('Erro ao cadastrar conferência:', error)
     res.status(500).json({ error: 'Erro interno ao salvar conferência no PostgreSQL.' })
   }
@@ -300,5 +306,18 @@ export async function deleteDelivery(req: AuthRequest, res: Response): Promise<v
     res.status(500).json({ error: 'Erro ao excluir conferência.' })
   } finally {
     await session?.endSession()
+  }
+}
+
+export async function restoreDelivery(req: AuthRequest, res: Response): Promise<void> {
+  if (!req.user || req.user.role !== 'admin') { res.status(403).json({ error: 'Somente administradores podem recuperar entregas.' }); return }
+  if (!isValidRecordId(req.params.id)) { res.status(400).json({ error: 'Registro de exclusão inválido.' }); return }
+  try {
+    const delivery = await restoreArchivedDelivery(req.params.id, req.user)
+    res.status(200).json(delivery.toJSON())
+  } catch (error) {
+    if (error instanceof DeliveryRestoreError) { res.status(error.status).json({ error: error.message }); return }
+    console.error('Erro ao recuperar entrega:', error)
+    res.status(500).json({ error: 'Não foi possível recuperar a entrega. Nenhuma alteração foi confirmada.' })
   }
 }

@@ -5,7 +5,7 @@ import { getPool } from '../src/config/postgres.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { DeliveryDeletionAudit } from '../src/models/DeliveryDeletionAudit.js'
 import { ProtocolCounter } from '../src/models/ProtocolCounter.js'
-import { allocateProtocol, initializeProtocolCounters } from '../src/services/protocol.js'
+import { allocateProtocol, initializeProtocolCounters, protocolDate } from '../src/services/protocol.js'
 import { saveReturnInspection, deleteDelivery } from '../src/controllers/deliveryController.js'
 import { User } from '../src/models/User.js'
 
@@ -26,11 +26,11 @@ test('PostgreSQL: protocolos concorrentes, exclusões, reinício e devoluções 
     await DeliveryDeletionAudit.create({ deliveryId: original.id, deliverySnapshot: { ...original.toObject(), protocol: `ENT-${new Date().getFullYear()}-0099` }, deletedByUserId: 'admin', deletedByEmail: 'admin@example.com' })
     await original.deleteOne()
     await initializeProtocolCounters()
-    assert.equal(await allocateProtocol(), `ENT-${new Date().getFullYear()}-0100`)
+    assert.equal(await allocateProtocol(), `ENT-${protocolDate()}-0100`)
     // Simula instalação sobre base antiga sem contador: o snapshot deve preservar a sequência.
     await getPool().query('DELETE FROM checklist_donato.protocol_counters')
     await initializeProtocolCounters()
-    assert.equal(await allocateProtocol(), `ENT-${new Date().getFullYear()}-0100`)
+    assert.equal(await allocateProtocol(), `ENT-${protocolDate()}-0100`)
   } finally {
     await database.cleanup()
   }

@@ -1,7 +1,8 @@
 :root {
+  color-scheme: light;
   font-family: "Roboto", Arial, sans-serif;
-  color: #26332d;
-  background: #f7f9fc;
+  color: var(--theme-text, #26332d);
+  background: var(--theme-page, #f7f9fc);
   --accent: #326fae;
   --accent-strong: #28639c;
   --accent-hover: #214f81;
@@ -28,6 +29,6 @@ button, input, textarea, select { font-family: inherit; }
 
 button { -webkit-tap-highlight-color: transparent; }
 
-::selection { color: #1d3c5c; background: #d3e5f7; }
+::selection { color: var(--theme-blue, #1d3c5c); background: var(--theme-blue-bg, #d3e5f7); }
 
 #root { min-height: 100vh; }

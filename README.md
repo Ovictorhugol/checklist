@@ -12,6 +12,7 @@ Aplicação web para registrar entregas e devoluções de equipamentos, acompanh
 - Registro de devolução e comparação das condições da entrega e da devolução.
 - Exclusão permitida apenas ao administrador, com confirmação e auditoria no PostgreSQL.
 - Tela administrativa para consultar entregas excluídas e o snapshot arquivado.
+- Recuperação de entregas excluídas pelo administrador, preservando os dados originais e registrando a recuperação na auditoria.
 - Troca da senha do usuário autenticado sem solicitar a senha anterior; nova senha com pelo menos 8 caracteres.
 - Layout responsivo para desktop e celular.
 
@@ -284,9 +285,59 @@ As reservas são persistidas na tabela `checklist_donato.reservations` do Postgr
 
 Login, cadastro e gravações exigem conexão com a API. A interface aguarda confirmação do servidor e exibe erros sem simular sucesso local. Alterações rejeitadas não modificam o histórico. Dados antigos em `localStorage` não são apagados, mas não são carregados nem sincronizados automaticamente; exporte e confira esses registros antes de migrá-los para o banco.
 
-Os protocolos são reservados por `INSERT ... ON CONFLICT DO UPDATE` atômico no PostgreSQL, por ano. Na inicialização, o contador considera os protocolos das entregas e dos snapshots de exclusão existentes, sem diminuir uma sequência já reservada. Exclusões não reutilizam números. Falhas após a reserva podem deixar lacunas na sequência. Protocolos enviados pelo cliente são ignorados.
+Novos protocolos usam `ENT-AAAA-MM-DD-NNNN`, por exemplo `ENT-2026-10-13-0006`. A data corresponde ao mesmo instante da entrega, no fuso `America/Sao_Paulo`. A sequência continua anual e é reservada por `INSERT ... ON CONFLICT DO UPDATE` atômico no PostgreSQL. Protocolos antigos são preservados. Na inicialização, o contador considera ambos os formatos nas entregas e nos snapshots de exclusão, sem diminuir uma sequência já reservada. Exclusões e recuperações não reutilizam números. Falhas após a reserva podem deixar lacunas na sequência. Protocolos enviados pelo cliente são ignorados.
+
+## Recuperar uma entrega excluída
+
+Em **Excluídas**, o administrador pode usar **Recuperar entrega** e confirmar a operação. A entrega volta à lista com o mesmo ID, protocolo, datas, CPF, inspeções e assinaturas. O registro de exclusão permanece no histórico e mostra a data e o autor da recuperação. A inserção da entrega e o registro da recuperação ocorrem na mesma transação; disputas simultâneas, conflitos de protocolo ou alterações no vínculo da reserva são recusados sem confirmar alterações parciais.
+
+Registros antigos sem snapshot completo não podem ser recuperados automaticamente, e a interface informa essa limitação. Após uma nova exclusão da mesma entrega, a recuperação utiliza o snapshot dessa última exclusão. A rota `POST /api/deliveries/deleted/:auditId/restore` exige autenticação e perfil de administrador.
+
+O script `server/sql/004_restore_deliveries.sql` adiciona os campos de recuperação e já foi aplicado ao RDS configurado. Em outra instalação, execute esse script antes de publicar esta versão da API. Para uma instalação nova, aplique `001_checklist_schema.sql`, `003_rds_backend.sql`, `004_restore_deliveries.sql`, `005_equipment_possession.sql`, `006_delivery_email.sql` e `007_return_email.sql`, nessa ordem.
+
+## Bloqueio de equipamentos em posse
+
+Uma entrega nova é recusada quando o patrimônio **ou** o número de série já aparece em uma entrega em posse. A comparação ignora maiúsculas/minúsculas e espaços nas extremidades, preservando os valores originais e zeros iniciais. Após registrar a devolução, os identificadores ficam disponíveis para outro empréstimo, mantendo o histórico anterior.
+
+O script `server/sql/005_equipment_possession.sql` mantém as ocupações no RDS e aplica a regra na mesma transação de cada entrega, inclusive em cadastros simultâneos, reservas e recuperações. A API retorna erro 409 com a identificação do campo bloqueado. Tentativas rejeitadas não gravam entregas nem deixam vínculos de reserva ou bloqueios parciais.
+
+Duplicidades anteriores à implantação são preservadas. Nesses casos, o equipamento permanece bloqueado enquanto houver qualquer entrega dele em posse. O script deve ser aplicado antes de publicar esta versão em outra instância do banco.
 
 O backend valida equipamento, peças únicas, inspeção completa e condições válidas. Na devolução, os IDs e as condições originais devem corresponder à entrega. Rótulos e condições da entrega são obtidos do registro original. Uma atualização condicional impede sobrescrever devoluções, inclusive em requisições simultâneas.
+
+## Envio automático do termo assinado
+
+O backend gera um PDF A4 com os dados, protocolo e traços da assinatura, usando o mesmo HTML, CSS, logotipo, campos e assinatura do botão de impressão. O modelo compartilhado fica em `server/src/domain/loanTermHtml.ts` e `loanTermStyles.ts`; o Chromium aplica o mesmo ajuste de escala para uma página. Na entrega assinada, o anexo inclui somente os dados do requisitante/produto e o termo de responsabilidade, sem as vias de devolução. Na devolução assinada, o anexo inclui somente a **Via do Requisitante** do termo de devolução, com observações, data e assinatura do recebedor. Os dois envios usam o `recipientEmail` da entrega; a impressão continua com o documento completo. O remetente configurado é `ti@donatoholhos.com.br` e o envio usa Microsoft Graph com autenticação de aplicativo. A senha da caixa não é utilizada.
+
+Para gerar o PDF no servidor, instale o Chromium do Playwright depois das dependências:
+
+```powershell
+npm --prefix server exec -- playwright install chromium
+```
+
+Em um servidor Linux, execute `playwright install --with-deps chromium` dentro de `server`. A instalação deve estar disponível para o usuário que executa a API. O navegador funciona sem interface e o documento usa somente recursos locais, sem acessar serviços externos.
+
+Configure exclusivamente no ambiente do backend:
+
+```dotenv
+MAIL_ENABLED=true
+MAIL_GRAPH_TENANT_ID=ID_DO_DIRETORIO
+MAIL_GRAPH_CLIENT_ID=ID_DO_APLICATIVO_DE_ENVIO
+MAIL_GRAPH_CLIENT_SECRET=VALOR_DO_SEGREDO
+MAIL_FROM_EMAIL=ti@donatoholhos.com.br
+```
+
+A autorização `Application Mail.Send` deve estar restrita à caixa remetente pelo RBAC do Exchange. A configuração de login do site permanece independente. `npm --prefix server run mail:check` verifica as credenciais obtendo um token sem enviar mensagens e sem exibir o segredo ou token. O segredo precisa ser renovado antes da expiração no Entra.
+
+O SQL `006_delivery_email.sql` cria a fila e o histórico de tentativas no RDS. O registro da fila ocorre na mesma transação da entrega e guarda uma cópia imutável dos dados assinados. O PDF gerado é preservado para novas tentativas, mesmo se a entrega for alterada depois. A fila não tem preenchimento retroativo: entregas antigas e recuperações não disparam novos e-mails automaticamente.
+
+Com `MAIL_ENABLED=true`, a API processa a fila a cada 10 segundos. A página de consulta da entrega mostra o estado do envio para administradores e permite uma nova tentativa após falha. Falhas de autenticação/rede antes do envio e rejeições temporárias são repetidas até cinco vezes, respeitando `Retry-After`. Uma conexão interrompida durante o envio ou um processo encerrado após iniciar a tentativa exige verificar Itens Enviados antes de reenviar, pois a Microsoft pode já ter recebido a mensagem.
+
+O estado “Encaminhado para envio” corresponde ao aceite HTTP 202 do Graph; não comprova chegada à caixa do destinatário. Veja a [documentação de sendMail](https://learn.microsoft.com/en-us/graph/api/user-sendmail?view=graph-rest-1.0). A implementação suporta anexos PDF menores que 3 MB. O processamento é parte da API, que precisa permanecer em execução; o servidor deve alcançar `login.microsoftonline.com` e `graph.microsoft.com` por HTTPS.
+
+Em outra implantação, aplique o SQL, configure as variáveis, instale as dependências, gere o build e reinicie a API. `MAIL_ENABLED=false` pausa o trabalhador e mantém os registros na fila. Alterações no `.env` exigem reiniciar o backend.
+
+O script `007_return_email.sql` já foi aplicado ao RDS. A fila possui um registro único por entrega e tipo (`delivery` ou `return`); a devolução agenda o envio na mesma transação que salva sua assinatura. Devoluções anteriores não são reenviadas. Na tela de detalhes, os status e as novas tentativas são separados para cada termo.
 
 ## Testes
 

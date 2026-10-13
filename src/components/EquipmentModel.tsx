@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { ArrowDownLeft, ArrowUpRight, RotateCcw } from 'lucide-react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -7,7 +7,7 @@ import { equipmentCatalog, type EquipmentId, type EquipmentPart } from '../domai
 type EquipmentModelProps = {
   equipmentId: EquipmentId
   parts: EquipmentPart[]
-  selectedPartId: string
+  selectedPartId: string | null
   onSelectPart: (partId: string) => void
 }
 
@@ -18,22 +18,72 @@ function EquipmentModel({ equipmentId, parts, selectedPartId, onSelectPart }: Eq
   const equipmentModelRef = useRef<THREE.Group | null>(null)
   const viewAnimationRef = useRef<number | null>(null)
 
+  const resetView = useCallback(() => {
+    if (viewAnimationRef.current !== null) {
+      window.cancelAnimationFrame(viewAnimationRef.current)
+      viewAnimationRef.current = null
+    }
+    const model = equipmentModelRef.current
+    const controls = controlsRef.current
+    if (!model || !controls) return
+    const startRotation = model.quaternion.clone()
+    const initialRotation = new THREE.Quaternion()
+    const startTarget = controls.target.clone()
+    const startOffset = new THREE.Spherical().setFromVector3(controls.object.position.clone().sub(startTarget))
+    const endOffset = new THREE.Spherical().setFromVector3(controls.position0.clone().sub(controls.target0))
+    // Follow the shortest orbit back to the initial view, without crossing the model.
+    const angleDelta = THREE.MathUtils.euclideanModulo(endOffset.theta - startOffset.theta + Math.PI, Math.PI * 2) - Math.PI
+    const offset = new THREE.Spherical()
+    const position = new THREE.Vector3()
+    const animationStart = performance.now()
+    const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 650
+
+    const animateReset = (now: number) => {
+      const progress = duration === 0 ? 1 : Math.min((now - animationStart) / duration, 1)
+      const eased = progress * progress * (3 - 2 * progress)
+      model.quaternion.slerpQuaternions(startRotation, initialRotation, eased)
+      controls.target.lerpVectors(startTarget, controls.target0, eased)
+      offset.radius = THREE.MathUtils.lerp(startOffset.radius, endOffset.radius, eased)
+      offset.phi = THREE.MathUtils.lerp(startOffset.phi, endOffset.phi, eased)
+      offset.theta = startOffset.theta + angleDelta * eased
+      controls.object.position.copy(position.setFromSpherical(offset).add(controls.target))
+      // Clear drag inertia so it cannot compete with the animated camera.
+      const damping = controls.enableDamping
+      controls.enableDamping = false
+      controls.update()
+      controls.enableDamping = damping
+      if (progress < 1) {
+        viewAnimationRef.current = window.requestAnimationFrame(animateReset)
+      } else {
+        model.quaternion.copy(initialRotation)
+        controls.reset()
+        viewAnimationRef.current = null
+      }
+    }
+    viewAnimationRef.current = window.requestAnimationFrame(animateReset)
+  }, [])
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     const scene = new THREE.Scene()
     sceneRef.current = scene
-    scene.background = new THREE.Color('#eef3f8')
-    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100)
-    const cameraSettings: Record<EquipmentId, { targetY: number; distance: number }> = {
-      notebook: { targetY: 1.15, distance: 8.8 },
-      desktop: { targetY: 1.35, distance: 8.1 },
-      phone: { targetY: 1.25, distance: 5.25 },
-      monitor: { targetY: 1.7, distance: 10.2 },
+    const updateTheme = () => {
+      scene.background = new THREE.Color(document.documentElement.dataset.theme === 'dark' ? '#1e2d3b' : '#eef3f8')
     }
-    const { targetY, distance } = cameraSettings[equipmentId]
-    const cameraTarget = new THREE.Vector3(0, targetY, 0)
+    updateTheme()
+    const themeObserver = new MutationObserver(updateTheme)
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100)
+    const cameraDistances: Record<EquipmentId, number> = {
+      notebook: 8.8,
+      desktop: 8.1,
+      phone: 5.25,
+      monitor: 10.2,
+    }
+    const distance = cameraDistances[equipmentId]
+    const cameraTarget = new THREE.Vector3()
     const cameraOffset = new THREE.Vector3(5.5, 3.05, 6.7).normalize().multiplyScalar(distance)
     camera.position.copy(cameraTarget).add(cameraOffset)
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false })
@@ -52,7 +102,6 @@ function EquipmentModel({ equipmentId, parts, selectedPartId, onSelectPart }: Eq
     controls.minDistance = 5.3
     controls.maxDistance = 10
     controls.maxPolarAngle = Math.PI * 0.48
-    controls.saveState()
 
     scene.add(new THREE.HemisphereLight('#ffffff', '#8492a0', 2.15))
     const keyLight = new THREE.DirectionalLight('#fff8e9', 3.1)
@@ -256,7 +305,13 @@ function EquipmentModel({ equipmentId, parts, selectedPartId, onSelectPart }: Eq
 
     if (equipmentId === 'desktop') equipmentModel.scale.set(0.9, 1, 1.8)
 
+    // Center the complete equipment before saving the reset position.
+    new THREE.Box3().setFromObject(equipmentModel).getCenter(cameraTarget)
+    controls.target.copy(cameraTarget)
+    camera.position.copy(cameraTarget).add(cameraOffset)
     camera.lookAt(cameraTarget)
+    controls.update()
+    controls.saveState()
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2()
     const onCanvasClick = (event: MouseEvent) => {
@@ -289,8 +344,13 @@ function EquipmentModel({ equipmentId, parts, selectedPartId, onSelectPart }: Eq
     animate()
 
     return () => {
+      if (viewAnimationRef.current !== null) {
+        window.cancelAnimationFrame(viewAnimationRef.current)
+        viewAnimationRef.current = null
+      }
       window.cancelAnimationFrame(frameId)
       resizeObserver.disconnect()
+      themeObserver.disconnect()
       canvas.removeEventListener('click', onCanvasClick)
       controls.dispose()
       controlsRef.current = null
@@ -316,6 +376,10 @@ function EquipmentModel({ equipmentId, parts, selectedPartId, onSelectPart }: Eq
     const equipmentModel = equipmentModelRef.current
     const controls = controlsRef.current
     if (!equipmentModel || !controls) return
+    if (!selectedPartId) {
+      resetView()
+      return
+    }
 
     const currentRotation = equipmentModel.rotation.y
     equipmentModel.rotation.y = 0
@@ -375,7 +439,7 @@ function EquipmentModel({ equipmentId, parts, selectedPartId, onSelectPart }: Eq
         viewAnimationRef.current = null
       }
     }
-  }, [equipmentId, selectedPartId])
+  }, [equipmentId, selectedPartId, resetView])
 
   useEffect(() => {
     sceneRef.current?.traverse((object) => {
@@ -402,14 +466,7 @@ function EquipmentModel({ equipmentId, parts, selectedPartId, onSelectPart }: Eq
     <div className="model-column">
       <div className="model-toolbar">
         <div className="view-label"><span className="live-dot" /> MODELO INTERATIVO <span className="view-divider">/</span> VISTA 3D</div>
-        <button className="icon-button view-reset" type="button" title="Reiniciar orientação" aria-label="Reiniciar orientação" onClick={() => {
-          if (viewAnimationRef.current !== null) {
-            window.cancelAnimationFrame(viewAnimationRef.current)
-            viewAnimationRef.current = null
-          }
-          equipmentModelRef.current?.rotation.set(0, 0, 0)
-          controlsRef.current?.reset()
-        }}><RotateCcw size={15} /></button>
+        <button className="icon-button view-reset" type="button" title="Reiniciar orientação" aria-label="Reiniciar orientação" onClick={resetView}><RotateCcw size={15} /></button>
       </div>
       <div className="model-stage">
         <canvas ref={canvasRef} className="equipment-canvas" aria-label={`Modelo 3D de ${equipmentCatalog.find((item) => item.id === equipmentId)?.name}. Clique em uma peça para selecioná-la e arraste para girar.`} />

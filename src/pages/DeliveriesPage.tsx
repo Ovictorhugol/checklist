@@ -22,6 +22,7 @@ import '../styles/DeliveriesPage.css'
 import SignatureDialog from '../components/SignatureDialog'
 import type { SignatureInput } from '../domain/signature'
 import LoanTermDocument from '../components/LoanTermDocument'
+import DeliveryEmailStatus from '../components/DeliveryEmailStatus'
 import { printLoanTermDocument } from '../services/printLoanTerm'
 import { formatCpf } from '../domain/cpf'
 
@@ -143,7 +144,7 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
   }
 
   const deleteDelivery = async (delivery: DeliveryRecord) => {
-    if (!window.confirm(`Excluir permanentemente a entrega ${delivery.protocol}?`)) return
+    if (!window.confirm(`Excluir a entrega ${delivery.protocol}? Ela poderá ser recuperada no histórico de excluídas.`)) return
     setDeletingId(delivery.id)
     setDeleteError('')
     try {
@@ -183,6 +184,8 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
           </div>
 
           {/* Banner de status do equipamento */}
+          {isAdmin && !hidden && <DeliveryEmailStatus key={selectedDelivery.id} deliveryId={selectedDelivery.id} />}
+          {isAdmin && !hidden && isDeliveryReturned(selectedDelivery) && <DeliveryEmailStatus key={`${selectedDelivery.id}-return`} deliveryId={selectedDelivery.id} eventType="return" />}
           <div className={`delivery-status-banner ${isDeliveryReturned(selectedDelivery) ? 'banner-returned' : 'banner-possession'}`}>
             {isDeliveryReturned(selectedDelivery) ? (
               <>

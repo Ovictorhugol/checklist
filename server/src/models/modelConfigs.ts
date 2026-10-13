@@ -35,6 +35,7 @@ export const auditConfig: ModelConfig = {
   table: 'delivery_deletion_audits', columns: {
     _id: 'id', deliveryId: 'delivery_id', deliverySnapshot: 'delivery_snapshot', protocol: 'protocol', assetTag: 'asset_tag', recipient: 'recipient',
     deletedByUserId: 'deleted_by_user_id', deletedByEmail: 'deleted_by_email', deletedAt: 'deleted_at',
+    restoredAt: 'restored_at', restoredByUserId: 'restored_by_user_id', restoredByEmail: 'restored_by_email',
   }, json: ['deliverySnapshot'], defaults: () => ({ deletedAt: new Date() }), normalize: data => normalizeStrings(data, ['deletedByEmail']),
   validate: data => { required(data, ['deliveryId', 'deletedByUserId', 'deletedByEmail']); if (!data.deliverySnapshot) throw new Error('Snapshot obrigatório.') },
 }

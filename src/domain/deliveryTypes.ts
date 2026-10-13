@@ -58,6 +58,10 @@ export type DeletedDeliveryAudit = {
   deletedByUserId: string
   deletedByEmail: string
   deletedAt: string
+  canRestore: boolean
+  restoredAt?: string
+  restoredByUserId?: string
+  restoredByEmail?: string
 }
 
 export type NewDelivery = Omit<DeliveryRecord, 'id' | 'protocol' | 'deliveredAt' | 'model' | 'brand' | 'signature'> & {

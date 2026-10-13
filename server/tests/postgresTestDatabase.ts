@@ -17,6 +17,10 @@ export async function createTestDatabase() {
   try {
     await getPool().query(await readFile(resolve(serverRoot, 'sql/001_checklist_schema.sql'), 'utf8'))
     await getPool().query(await readFile(resolve(serverRoot, 'sql/003_rds_backend.sql'), 'utf8'))
+    await getPool().query(await readFile(resolve(serverRoot, 'sql/004_restore_deliveries.sql'), 'utf8'))
+    await getPool().query(await readFile(resolve(serverRoot, 'sql/005_equipment_possession.sql'), 'utf8'))
+    await getPool().query(await readFile(resolve(serverRoot, 'sql/006_delivery_email.sql'), 'utf8'))
+    await getPool().query(await readFile(resolve(serverRoot, 'sql/007_return_email.sql'), 'utf8'))
   } catch (error) { await cleanup(); throw error }
   async function cleanup() {
     if (process.env.PGDATABASE !== name || !/^checklist_test_[a-f0-9]{32}$/.test(name)) throw new Error('Nome do banco de testes inesperado; remoção recusada.')

@@ -11,7 +11,8 @@
     "test": "tsx --test tests/*.test.ts",
     "admin:check": "tsx src/scripts/adminAccount.ts --check",
     "admin:reset": "tsx src/scripts/adminAccount.ts --reset",
-    "db:check": "tsx src/scripts/checkRds.ts"
+    "db:check": "tsx src/scripts/checkRds.ts",
+    "mail:check": "tsx src/scripts/checkMail.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
@@ -20,7 +21,8 @@
     "express": "^4.21.2",
     "jose": "^6.2.12",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "playwright": "^1.64.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

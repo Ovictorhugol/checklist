@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
   CheckCircle2,
   CircleAlert,
@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import SignatureDialog from '../components/SignatureDialog'
+import ThemeToggle from '../components/ThemeToggle'
 import type { SignatureInput } from '../domain/signature'
 import type { NewDelivery } from '../domain/deliveryTypes'
 import type { ReservationRecord } from '../domain/reservation'
@@ -39,7 +40,8 @@ function App() {
   const [equipmentBrand, setEquipmentBrand] = useState('')
   const [accessories, setAccessories] = useState('')
   const [parts, setParts] = useState(() => getInitialParts('notebook'))
-  const [selectedPartId, setSelectedPartId] = useState('display')
+  const [selectedPartId, setSelectedPartId] = useState<string | null>(null)
+  const [modelViewKey, setModelViewKey] = useState(0)
   const [assetTag, setAssetTag] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
   const [recipient, setRecipient] = useState('')
@@ -71,7 +73,10 @@ function App() {
     return () => window.removeEventListener('donato-session-expired', expireSession)
   }, [])
   const selectedEquipment = equipmentCatalog.find((equipment) => equipment.id === equipmentId) ?? equipmentCatalog[0]
-  const selectedPart = parts.find((part) => part.id === selectedPartId) ?? parts[0]
+  const selectedPart = parts.find((part) => part.id === selectedPartId)
+  const selectPart = useCallback((partId: string) => {
+    setSelectedPartId((current) => current === partId ? null : partId)
+  }, [])
   const inspectedCount = parts.filter((part) => part.status !== 'pending').length
   const damagedCount = parts.filter((part) => part.status === 'damaged').length
   const isComplete = inspectedCount === parts.length
@@ -96,6 +101,7 @@ function App() {
   }
 
   const inspectPart = (status: Exclude<InspectionStatus, 'pending'>) => {
+    if (!selectedPart) return
     const currentIndex = parts.findIndex((part) => part.id === selectedPart.id)
     const nextPendingPart = [
       ...parts.slice(currentIndex + 1),
@@ -109,7 +115,8 @@ function App() {
   const resetChecklist = () => {
     setParts(getInitialParts(equipmentId))
     setRegistered(false)
-    setSelectedPartId(getInitialParts(equipmentId)[0].id)
+    setSelectedPartId(null)
+    setModelViewKey((current) => current + 1)
   }
 
   const changeEquipment = (nextEquipmentId: EquipmentId) => {
@@ -118,7 +125,8 @@ function App() {
     setEquipmentBrand('')
     const nextParts = getInitialParts(nextEquipmentId)
     setParts(nextParts)
-    setSelectedPartId(nextParts[0].id)
+    setSelectedPartId(null)
+    setModelViewKey((current) => current + 1)
     setRegistered(false)
   }
 
@@ -156,6 +164,8 @@ function App() {
       setRegistered(true)
       setPendingDelivery(null)
       setSelectedReservation(null)
+      setActivePage('deliveries')
+      setDeliveriesResetKey((current) => current + 1)
     } catch (error) {
       setRegistrationError((error as Error).message)
       throw error
@@ -281,6 +291,7 @@ function App() {
               <Archive size={17} /><span>Excluídas</span>
             </button>
           )}
+          <ThemeToggle />
         </nav>
         <button className="side-nav-logout" type="button" onClick={logout}>
           <span className="avatar">{userEmail.slice(0, 1).toUpperCase()}</span><span className="side-nav-user-email">{userEmail}</span><LogOut size={15} />
@@ -291,7 +302,12 @@ function App() {
         <DeliveriesPage
           key={deliveriesResetKey}
           deliveries={deliveries}
-          onNewDelivery={() => { setSelectedReservation(null); setActivePage('checklist') }}
+          onNewDelivery={() => {
+            setSelectedReservation(null)
+            setSelectedPartId(null)
+            setModelViewKey((current) => current + 1)
+            setActivePage('checklist')
+          }}
           onSaveReturn={saveReturnInspection}
           onDeleteDelivery={deleteDelivery}
           isAdmin={userRole === 'admin'}
@@ -299,7 +315,7 @@ function App() {
           personalName={userRole === 'operator' ? userName : undefined}
           hidden={activePage !== 'deliveries'}
         />
-        {userRole === 'admin' && <DeletedDeliveriesPage hidden={activePage !== 'deleted'} />}
+        {userRole === 'admin' && <DeletedDeliveriesPage hidden={activePage !== 'deleted'} onRestored={refresh} />}
         {activePage === 'reservations' && <ReservationsPage key={userEmail} isAdmin={userRole === 'admin'} userName={userName} userEmail={userEmail} onStartInspection={startReservationInspection} />}
         {loading && <p role="status">Carregando entregas...</p>}
         {loadError && <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void refresh()}>Tentar carregar novamente</button></div>}
@@ -319,15 +335,15 @@ function App() {
         {selectedReservation && <div className="confirmation-banner reservation-inspection-banner" role="status"><CalendarDays size={16} /><span>Conferência da reserva de {selectedReservation.requesterName}. O protocolo será vinculado ao registrar a entrega assinada.</span><button type="button" disabled={registrationBusy} onClick={() => { setSelectedReservation(null); setActivePage('reservations') }}>Cancelar conferência</button></div>}
         <fieldset disabled={registrationBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, pointerEvents: registrationBusy ? 'none' : undefined }}>
         <section className="inspection-layout" aria-label="Conferência do equipamento">
-          <EquipmentModel equipmentId={equipmentId} parts={parts} selectedPartId={selectedPartId} onSelectPart={setSelectedPartId} />
+          <EquipmentModel key={modelViewKey} equipmentId={equipmentId} parts={parts} selectedPartId={selectedPartId} onSelectPart={selectPart} />
           <InspectionPanel
             parts={parts}
             selectedPart={selectedPart}
             selectedPartId={selectedPartId}
             inspectedCount={inspectedCount}
-            onSelectPart={setSelectedPartId}
+            onSelectPart={selectPart}
             onInspectPart={inspectPart}
-            onUpdateNote={(note) => updatePart(selectedPart.id, { note })}
+            onUpdateNote={(note) => { if (selectedPart) updatePart(selectedPart.id, { note }) }}
           />
         </section>
 

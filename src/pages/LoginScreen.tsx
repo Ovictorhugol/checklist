@@ -3,6 +3,7 @@ import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
 import { authenticateLocalAccount, authenticateMicrosoftAccount, type AuthUser } from '../services/auth'
 import { microsoftAuthEnabled } from '../services/microsoftAuth'
 import '../styles/LoginScreen.css'
+import ThemeToggle from '../components/ThemeToggle'
 
 type LoginScreenProps = {
   onLogin: (user: AuthUser) => void
@@ -47,6 +48,7 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
 
   return (
     <main className="login-screen">
+      <ThemeToggle />
       <section className="login-panel" aria-labelledby="login-title">
         <a className="login-brand" href="#login" aria-label="Donato Hospital de Olhos">
           <img src="/donato-eye.svg" alt="" />
