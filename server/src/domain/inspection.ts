@@ -1,13 +1,12 @@
 import type { IDeliveryPart, IReturnInspectionPart } from '../models/Delivery.js'
+import { equipmentCatalog } from './equipment.js'
 
-const equipmentParts: Record<string, string[]> = {
-  'Notebook Dell Latitude 5440': ['display', 'keyboard', 'touchpad', 'case', 'ports'],
-  'Computador Dell OptiPlex 3000': ['case', 'front-panel', 'ports', 'rear-ports'],
-  'Celular Samsung Galaxy A36': ['display', 'case', 'cameras', 'buttons', 'ports'],
-  'Monitor Dell P2222H': ['display', 'bezel', 'stand', 'buttons', 'ports'],
-}
+const equipmentParts: Record<string, string[]> = Object.fromEntries(
+  equipmentCatalog.map((equipment) => [equipment.apiName, equipment.parts.map((part) => part.id)])
+)
 
 const text = (value: unknown): value is string => typeof value === 'string' && !!value.trim()
+export const isInspectionEquipment = (value: unknown): value is string => typeof value === 'string' && Object.hasOwn(equipmentParts, value)
 const condition = (value: unknown) => value === 'ok' || value === 'damaged'
 
 export function validateDeliveryParts(equipment: string, input: unknown): IDeliveryPart[] {

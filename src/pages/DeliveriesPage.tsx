@@ -16,9 +16,11 @@ import {
   isDeliveryReturned,
   getDeliveryDamageCount,
   type ReturnInspectionPart,
-  type ReturnInspectionRecord,
+  type ReturnInspectionInput,
 } from '../domain/deliveryTypes'
 import '../styles/DeliveriesPage.css'
+import SignatureDialog from '../components/SignatureDialog'
+import type { SignatureInput } from '../domain/signature'
 import LoanTermDocument from '../components/LoanTermDocument'
 import { printLoanTermDocument } from '../services/printLoanTerm'
 import { formatCpf } from '../domain/cpf'
@@ -26,7 +28,7 @@ import { formatCpf } from '../domain/cpf'
 type DeliveriesPageProps = {
   deliveries: DeliveryRecord[]
   onNewDelivery: () => void
-  onSaveReturn: (deliveryId: string, inspection: ReturnInspectionRecord) => Promise<DeliveryRecord>
+  onSaveReturn: (deliveryId: string, inspection: ReturnInspectionInput) => Promise<DeliveryRecord>
   onDeleteDelivery: (deliveryId: string) => Promise<void>
   isAdmin: boolean
   personalEmail?: string
@@ -55,6 +57,7 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
   const [returnNotes, setReturnNotes] = useState<Record<string, string>>({})
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState('')
+  const [pendingReturn, setPendingReturn] = useState<Omit<ReturnInspectionInput, 'signature'> | null>(null)
   const [returnBusy, setReturnBusy] = useState(false)
   const [returnError, setReturnError] = useState('')
 
@@ -105,11 +108,11 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
     setIsReturnInspection(true)
   }
 
-  const saveReturn = async () => {
+  const beginReturnSignature = () => {
     if (returnBusy) return
     if (!selectedDelivery || selectedDelivery.parts.some((part) => !returnStatuses[part.id])) return
     const returnDate = new Date().toISOString()
-    const inspection: ReturnInspectionRecord = {
+    const inspection: Omit<ReturnInspectionInput, 'signature'> = {
       returnedAt: returnDate,
       parts: selectedDelivery.parts.map((part): ReturnInspectionPart => ({
         id: part.id,
@@ -119,14 +122,21 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
         note: (returnNotes[part.id] ?? '').trim(),
       })),
     }
+    setPendingReturn(inspection)
+  }
+
+  const saveReturn = async (signature: SignatureInput) => {
+    if (!selectedDelivery || !pendingReturn || returnBusy) return
     setReturnBusy(true)
     setReturnError('')
     try {
-      const updated = await onSaveReturn(selectedDelivery.id, inspection)
+      const updated = await onSaveReturn(selectedDelivery.id, { ...pendingReturn, returnedAt: new Date().toISOString(), signature })
       setSelectedDelivery(updated)
       setIsReturnInspection(false)
+      setPendingReturn(null)
     } catch (error) {
       setReturnError((error as Error).message)
+      throw error
     } finally {
       setReturnBusy(false)
     }
@@ -147,6 +157,13 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
 
   return (
     <main id="entregas" className="history-page" hidden={hidden}>
+      {pendingReturn && selectedDelivery && <SignatureDialog title="Assinatura da devolução" signerName={personalName || ''} editableName onCancel={() => setPendingReturn(null)} onConfirm={saveReturn}>
+        <p><strong>Protocolo:</strong> {selectedDelivery.protocol} · <strong>Patrimônio:</strong> {selectedDelivery.assetTag}</p>
+        <p><strong>Equipamento:</strong> {selectedDelivery.equipment} · <strong>Responsável pela entrega:</strong> {selectedDelivery.recipient}</p>
+        <p>A assinatura deve ser feita pelo responsável do hospital que recebe e confere o equipamento.</p>
+        <ul>{pendingReturn.parts.map((part) => <li key={part.id}>{part.label}: {part.returnedStatus === 'damaged' ? 'Danificado' : 'Sem danos'}{part.note && ` — ${part.note}`}</li>)}</ul>
+        <p>Declaro que recebi o equipamento em devolução nas condições da inspeção acima, ressalvadas as observações registradas.</p>
+      </SignatureDialog>}
       {returnError && <p role="alert">{returnError}</p>}
       {selectedDelivery ? (
         <section className="delivery-view" aria-labelledby="delivery-view-title">
@@ -266,9 +283,9 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
                   className="return-save-button"
                   type="button"
                   disabled={returnBusy || selectedDelivery.parts.some((part) => !returnStatuses[part.id])}
-                  onClick={() => void saveReturn()}
+                  onClick={beginReturnSignature}
                 >
-                  {returnBusy ? 'Salvando...' : 'Salvar conferência de devolução'}
+                  {returnBusy ? 'Salvando...' : 'Assinar e registrar devolução'}
                 </button>
               </div>
             </section>
@@ -332,7 +349,7 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
             </div>
           </section>
           <div className="delivery-readonly-notice">
-            <ShieldCheck size={15} /> Registro histórico com sincronização MongoDB
+            <ShieldCheck size={15} /> Registro histórico sincronizado
           </div>
           <LoanTermDocument delivery={selectedDelivery} />
         </section>

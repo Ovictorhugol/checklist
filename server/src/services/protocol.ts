@@ -5,8 +5,8 @@ import { ProtocolCounter } from '../models/ProtocolCounter.js'
 // Inclui registros antigos e arquivados para não reutilizar protocolos excluídos.
 export async function initializeProtocolCounters(): Promise<void> {
   const [deliveries, audits] = await Promise.all([
-    Delivery.find().select('protocol').lean(),
-    DeliveryDeletionAudit.find().select('protocol deliverySnapshot.protocol').lean(),
+    Delivery.find().lean(),
+    DeliveryDeletionAudit.find().lean(),
   ])
   const maxima = new Map<string, number>()
   for (const record of [...deliveries, ...audits]) {
@@ -23,18 +23,10 @@ export async function initializeProtocolCounters(): Promise<void> {
 
 export async function allocateProtocol(): Promise<string> {
   const year = new Date().getFullYear()
-  // O _id único e o incremento atômico serializam cadastros simultâneos.
-  const increment = (upsert: boolean) => ProtocolCounter.findOneAndUpdate(
-    { _id: String(year) }, { $inc: { sequence: 1 } }, { upsert, new: true }
+  // O UPSERT PostgreSQL incrementa o contador numa única operação atômica.
+  const counter = await ProtocolCounter.findOneAndUpdate(
+    { _id: String(year) }, { $inc: { sequence: 1 } }, { upsert: true, new: true }
   )
-  let counter
-  try {
-    counter = await increment(true)
-  } catch (error) {
-    // Na virada do ano, duas instâncias podem tentar inserir o mesmo contador.
-    if ((error as { code?: number }).code !== 11000) throw error
-    counter = await increment(false)
-  }
   if (!counter) throw new Error('Não foi possível reservar o protocolo.')
   return `ENT-${year}-${String(counter!.sequence).padStart(4, '0')}`
 }

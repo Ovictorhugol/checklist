@@ -11,6 +11,7 @@ import { ProtocolCounter } from '../src/models/ProtocolCounter.js'
 import { initializeProtocolCounters, allocateProtocol } from '../src/services/protocol.js'
 import { createDelivery, saveReturnInspection } from '../src/controllers/deliveryController.js'
 
+const signature = { signerName: 'R', strokes: [[{ x: 10, y: 50 }, { x: 150, y: 90 }]] }
 const secret = 'test-only-random-secret-with-more-than-32-characters'
 const originals = { find: Delivery.find, findById: Delivery.findById, create: Delivery.create, update: Delivery.findOneAndUpdate, auditFind: DeliveryDeletionAudit.find, counterUpdate: ProtocolCounter.updateOne, counterIncrement: ProtocolCounter.findOneAndUpdate }
 const originalEnv = { ...process.env }
@@ -51,9 +52,9 @@ test('todas as rotas bloqueiam ausência, invalidez e expiração de JWT; operad
 })
 
 test('configuração recusa segredos, senhas padrão e placeholders', () => {
-  Object.assign(process.env, { JWT_SECRET: secret, MONGO_URI: 'mongodb://localhost/test', ADMIN_EMAIL: 'admin@example.com', ADMIN_PASSWORD: 'exclusive-password-123' })
+  Object.assign(process.env, { JWT_SECRET: secret, PGHOST: 'localhost', PGDATABASE: 'test', PGUSER: 'test', PGPASSWORD: 'exclusive-password-123', PGSSLROOTCERT: 'certs/global-bundle.pem', ADMIN_EMAIL: 'admin@example.com', ADMIN_PASSWORD: 'exclusive-password-123' })
   validateEnvironment()
-  for (const [key, value] of [['JWT_SECRET', 'secret'], ['JWT_SECRET', 'SUBSTITUA_POR_UM_SEGREDO_ALEATORIO'], ['ADMIN_PASSWORD', 'admin12345'], ['ADMIN_PASSWORD', 'SUBSTITUA_POR_UMA_SENHA_FORTE'], ['ADMIN_EMAIL', 'invalid'], ['MONGO_URI', 'mongodb://admin:SUA_SENHA_AQUI@host/db']]) {
+  for (const [key, value] of [['JWT_SECRET', 'secret'], ['JWT_SECRET', 'SUBSTITUA_POR_UM_SEGREDO_ALEATORIO'], ['ADMIN_PASSWORD', 'admin12345'], ['ADMIN_PASSWORD', 'SUBSTITUA_POR_UMA_SENHA_FORTE'], ['ADMIN_EMAIL', 'invalid'], ['PGPASSWORD', 'SUA_SENHA_AQUI'], ['PGHOST', ''], ['PGDATABASE', ''], ['PGSSLROOTCERT', '']]) {
     const previous = process.env[key]; process.env[key] = value
     assert.throws(validateEnvironment, undefined, key)
     process.env[key] = previous
@@ -78,8 +79,8 @@ test('devolução rejeita peças trocadas, duplicadas, incompletas e condição 
 
 test('migração mantém máximos de protocolos ativos e arquivados', async () => {
   const year = new Date().getFullYear()
-  Delivery.find = (() => ({ select: () => ({ lean: async () => [{ protocol: `ENT-${year}-0003` }] }) })) as any
-  DeliveryDeletionAudit.find = (() => ({ select: () => ({ lean: async () => [{ deliverySnapshot: { protocol: `ENT-${year}-0025` } }, { protocol: 'ENT-2020-0008' }] }) })) as any
+  Delivery.find = (() => ({ lean: async () => [{ protocol: `ENT-${year}-0003` }] })) as any
+  DeliveryDeletionAudit.find = (() => ({ lean: async () => [{ deliverySnapshot: { protocol: `ENT-${year}-0025` } }, { protocol: 'ENT-2020-0008' }] })) as any
   const counters = new Map<string, number>()
   ProtocolCounter.updateOne = (async (filter: any, update: any) => { counters.set(filter._id, Math.max(counters.get(filter._id) ?? 0, update.$max.sequence)) }) as any
   await initializeProtocolCounters()
@@ -90,14 +91,18 @@ test('migração mantém máximos de protocolos ativos e arquivados', async () =
   assert.equal(counters.get(String(year)), 30)
 })
 
-test('reserva recupera corrida de inserção do contador na virada do ano', async () => {
+test('reserva de protocolo usa operação atômica e propaga falhas do PostgreSQL', async () => {
   let calls = 0
   ProtocolCounter.findOneAndUpdate = (async (_filter: any, _update: any, options: any) => {
-    if (++calls === 1) { assert.equal(options.upsert, true); throw Object.assign(new Error('duplicate'), { code: 11000 }) }
-    assert.equal(options.upsert, false)
+    calls++
+    assert.equal(options.upsert, true)
     return { sequence: 2 }
   }) as any
   assert.equal(await allocateProtocol(), `ENT-${new Date().getFullYear()}-0002`)
+  assert.equal(calls, 1)
+  const failure = Object.assign(new Error('connection lost'), { code: '08006' })
+  ProtocolCounter.findOneAndUpdate = (async () => { throw failure }) as any
+  await assert.rejects(allocateProtocol(), (error) => error === failure)
 })
 
 test('cadastro ignora protocolo do cliente e registra autor autenticado', async () => {
@@ -105,7 +110,7 @@ test('cadastro ignora protocolo do cliente e registra autor autenticado', async 
   let stored: any
   Delivery.create = (async (input: any) => { stored = input; return { toJSON: () => input } }) as any
   const res = response()
-  await createDelivery({ body: { equipment, parts, assetTag: 'A', serialNumber: 'S', recipient: 'R', recipientEmail: 'r@example.com', recipientCpf: '529.982.247-25', recipientDepartment: 'TI', model: 'M', brand: 'B', accessories: 'Carregador', protocol: 'forged' }, user: { email: 'operator@example.com' } } as any, res as any)
+  await createDelivery({ body: { equipment, parts, assetTag: 'A', serialNumber: 'S', recipient: 'R', recipientEmail: 'r@example.com', recipientCpf: '529.982.247-25', recipientDepartment: 'TI', model: 'M', brand: 'B', accessories: 'Carregador', signature, protocol: 'forged' }, user: { email: 'operator@example.com' } } as any, res as any)
   assert.equal(res.code, 201)
   assert.equal(stored.protocol, `ENT-${new Date().getFullYear()}-0042`)
   assert.equal(stored.deliveredBy, 'operator@example.com')
@@ -116,12 +121,12 @@ test('cadastro ignora protocolo do cliente e registra autor autenticado', async 
 test('devolução repetida ou perdedora de corrida retorna conflito', async () => {
   Delivery.findById = (async () => ({ ...delivery, isReturned: true })) as any
   const res = response()
-  await saveReturnInspection({ params: { id: delivery._id }, body: { parts: returned }, user: { email: 'operator@example.com' } } as any, res as any)
+  await saveReturnInspection({ params: { id: delivery._id }, body: { parts: returned, signature }, user: { email: 'operator@example.com' } } as any, res as any)
   assert.equal(res.code, 409)
   Delivery.findById = (async () => delivery) as any
   Delivery.findOneAndUpdate = (async (filter: any) => { assert.equal(filter.isReturned.$ne, true); assert.equal(filter.returnInspection, null); return null }) as any
   const raced = response()
-  await saveReturnInspection({ params: { id: delivery._id }, body: { parts: returned }, user: { email: 'operator@example.com' } } as any, raced as any)
+  await saveReturnInspection({ params: { id: delivery._id }, body: { parts: returned, signature }, user: { email: 'operator@example.com' } } as any, raced as any)
   assert.equal(raced.code, 409)
 })
 

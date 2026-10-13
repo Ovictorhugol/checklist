@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import type { DeliveryRecord, NewDelivery, ReturnInspectionRecord } from '../domain/deliveryTypes'
+import type { DeliveryRecord, NewDelivery, ReturnInspectionInput } from '../domain/deliveryTypes'
 import { apiGetDeliveries, apiGetMyDeliveries, apiCreateDelivery, apiSaveReturnInspection, apiDeleteDelivery } from '../services/api'
 
 export function useDeliveries(userEmail: string | null, personal = false) {
@@ -33,7 +33,7 @@ export function useDeliveries(userEmail: string | null, personal = false) {
     if (currentOwner.current === owner) setState((current) => ({ owner, records: [saved, ...(current.owner === owner ? current.records : [])], error: '' }))
     return saved
   }
-  const saveReturnInspection = async (id: string, inspection: ReturnInspectionRecord) => {
+  const saveReturnInspection = async (id: string, inspection: ReturnInspectionInput) => {
     const updated = await apiSaveReturnInspection(id, inspection)
     if (currentOwner.current === owner) setState((current) => ({ ...current, records: current.records.map((item) => item.id === id ? updated : item) }))
     return updated

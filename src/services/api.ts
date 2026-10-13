@@ -1,4 +1,5 @@
-import type { DeletedDeliveryAudit, DeliveryRecord, NewDelivery, ReturnInspectionRecord } from '../domain/deliveryTypes'
+import type { DeletedDeliveryAudit, DeliveryRecord, NewDelivery, ReturnInspectionInput } from '../domain/deliveryTypes'
+import type { NewReservation, ReservationRecord, ReservationStatus } from '../domain/reservation'
 import { microsoftAuthEnabled, getMicrosoftAccessToken } from './microsoftAuth'
 
 const tokenKey = 'donato-auth-token'
@@ -54,5 +55,8 @@ export const apiGetDeliveries = () => request<DeliveryRecord[]>('/deliveries')
 export const apiGetMyDeliveries = () => request<DeliveryRecord[]>('/deliveries/mine')
 export const apiGetDeletedDeliveries = () => request<DeletedDeliveryAudit[]>('/deliveries/deleted')
 export const apiCreateDelivery = (delivery: NewDelivery) => request<DeliveryRecord>('/deliveries', 'POST', delivery)
-export const apiSaveReturnInspection = (id: string, inspection: ReturnInspectionRecord) => request<DeliveryRecord>(`/deliveries/${id}/return`, 'PUT', inspection)
+export const apiSaveReturnInspection = (id: string, inspection: ReturnInspectionInput) => request<DeliveryRecord>(`/deliveries/${id}/return`, 'PUT', inspection)
 export const apiDeleteDelivery = (id: string) => request<{ message: string }>(`/deliveries/${id}`, 'DELETE')
+export const apiGetReservations = () => request<ReservationRecord[]>('/reservations')
+export const apiCreateReservation = (data: NewReservation) => request<ReservationRecord>('/reservations', 'POST', data)
+export const apiUpdateReservation = (id: string, status: Exclude<ReservationStatus, 'pendente'>, reviewNote = '') => request<ReservationRecord>(`/reservations/${id}`, 'PATCH', { status, reviewNote })

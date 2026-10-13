@@ -70,7 +70,7 @@ function DeletedDeliveriesPage({ hidden }: { hidden: boolean }) {
           ))}
         </section>
       )}
-      <footer className="deleted-footer"><ShieldCheck size={14} /> Histórico de auditoria mantido no MongoDB</footer>
+      <footer className="deleted-footer"><ShieldCheck size={14} /> Histórico de auditoria preservado</footer>
     </main>
   )
 }

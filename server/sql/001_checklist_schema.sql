@@ -1,6 +1,6 @@
 -- Execute with psql -v ON_ERROR_STOP=1 -f server/sql/001_checklist_schema.sql
 -- Initial schema only: aborts if checklist_donato already exists.
--- IDs are supplied by the backend/importer. TEXT preserves MongoDB ObjectIds.
+-- IDs are supplied by the backend. TEXT preserves existing record identifiers.
 -- The PostgreSQL backend must map snake_case columns to the existing API fields.
 BEGIN;
 
@@ -70,7 +70,7 @@ CREATE INDEX delivery_deletion_audits_delivery_id_idx ON checklist_donato.delive
 CREATE INDEX delivery_deletion_audits_user_id_idx ON checklist_donato.delivery_deletion_audits (deleted_by_user_id);
 CREATE INDEX delivery_deletion_audits_deleted_at_idx ON checklist_donato.delivery_deletion_audits (deleted_at DESC);
 
--- Match Mongoose timestamps on updates without requiring backend assignment.
+-- Refresh timestamps on updates without requiring backend assignment.
 CREATE FUNCTION checklist_donato.set_updated_at() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog AS $$
 BEGIN

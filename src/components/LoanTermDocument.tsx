@@ -1,3 +1,4 @@
+import SignatureMark from './SignatureMark'
 import { useEffect, useRef } from 'react'
 import type { DeliveryRecord } from '../domain/deliveryTypes'
 import { formatCpf } from '../domain/cpf'
@@ -77,7 +78,7 @@ export default function LoanTermDocument({ delivery }: { delivery: DeliveryRecor
           </ul>
         </div>
         <div className="loan-term-signatures">
-          <div><span>Assinatura do Funcionário Requisitante:</span><i /></div>
+          <div><span>Assinatura do Funcionário Requisitante:</span><SignatureMark signature={delivery.signature} /></div>
           <div><span>Data do Empréstimo:</span><strong>{dateFormatter.format(new Date(delivery.deliveredAt))}</strong></div>
         </div>
       </section>
@@ -91,7 +92,7 @@ export default function LoanTermDocument({ delivery }: { delivery: DeliveryRecor
           </div>
           <div className="loan-term-observations"><span>Observações:</span><strong>{observations || ' '}</strong></div>
           <div className="loan-term-signatures">
-            <div><span>Assinatura do Funcionário Responsável pelo Recebimento:</span><i /></div>
+            <div><span>Assinatura do Funcionário Responsável pelo Recebimento:</span><SignatureMark signature={delivery.returnInspection?.signature} /></div>
             <div><span>Data da Devolução:</span><strong>{returnDate ? dateFormatter.format(new Date(returnDate)) : '____ / ____ / ______'}</strong></div>
           </div>
         </section>

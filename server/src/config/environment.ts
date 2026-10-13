@@ -12,8 +12,10 @@ export function validateEnvironment(): void {
   const microsoft = isMicrosoftAuth()
   if (microsoft) getMicrosoftConfig()
   else getJwtSecret()
-  if (!process.env.MONGO_URI || /SUA_SENHA|<usuario>|<senha>/i.test(process.env.MONGO_URI)) {
-    throw new Error('Configure MONGO_URI com uma conexão válida.')
+  for (const key of ['PGHOST', 'PGDATABASE', 'PGUSER', 'PGPASSWORD', 'PGSSLROOTCERT']) {
+    if (!process.env[key] || /SUA_SENHA|SUBSTITUA|<senha>/i.test(process.env[key]!)) {
+      throw new Error(`Configure ${key} para a conexão PostgreSQL/RDS.`)
+    }
   }
   if (microsoft) return
   if (!process.env.ADMIN_EMAIL || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(process.env.ADMIN_EMAIL.trim())) {

@@ -19,10 +19,10 @@ export async function ensureAdminUser(): Promise<void> {
       role: 'admin',
     })
 
-    console.log(`👑 Usuário Administrador criado no MongoDB: ${adminEmail}`)
+    console.log(`👑 Usuário Administrador criado no PostgreSQL: ${adminEmail}`)
   } else if (existingAdmin.role !== 'admin') {
     existingAdmin.role = 'admin'
     await existingAdmin.save()
-    console.log(`👑 Usuário ${adminEmail} atualizado para privilégio ADMIN no MongoDB.`)
+    console.log(`👑 Usuário ${adminEmail} atualizado para privilégio ADMIN no PostgreSQL.`)
   }
 }

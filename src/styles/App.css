@@ -542,3 +542,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent-mid); ou
   .equipment-field, .recipient-field, .accessories-field { grid-column: auto; }
   .date-field { grid-column: auto; }
 }
+
+.reservation-inspection-banner { flex-wrap: wrap; margin-bottom: 16px; font-size: 12px; }
+.reservation-inspection-banner span { flex: 1; min-width: 180px; }
+.reservation-inspection-banner button { padding: 8px 12px; border: 1px solid var(--accent-border); border-radius: 6px; background: #fff; color: var(--accent-strong); cursor: pointer; }

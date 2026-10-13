@@ -4,6 +4,7 @@ import {
   CircleAlert,
   ClipboardCheck,
   ClipboardList,
+  CalendarDays,
   Archive,
   KeyRound,
   LogOut,
@@ -12,10 +13,15 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react'
+import SignatureDialog from '../components/SignatureDialog'
+import type { SignatureInput } from '../domain/signature'
+import type { NewDelivery } from '../domain/deliveryTypes'
+import type { ReservationRecord } from '../domain/reservation'
 import EquipmentModel from '../components/EquipmentModel'
 import InspectionPanel from '../components/InspectionPanel'
 import DeliveriesPage from '../pages/DeliveriesPage'
 import DeletedDeliveriesPage from '../pages/DeletedDeliveriesPage'
+import ReservationsPage from '../pages/ReservationsPage'
 import LoginScreen from '../pages/LoginScreen'
 import { equipmentCatalog, getInitialParts, type EquipmentId, type EquipmentPart, type InspectionStatus } from '../domain/inspection'
 import { useDeliveries } from '../hooks/useDeliveries'
@@ -42,10 +48,12 @@ function App() {
   const [recipientCpfTouched, setRecipientCpfTouched] = useState(false)
   const [recipientDepartment, setRecipientDepartment] = useState('')
   const [registered, setRegistered] = useState(false)
+  const [pendingDelivery, setPendingDelivery] = useState<Omit<NewDelivery, 'signature'> | null>(null)
+  const [selectedReservation, setSelectedReservation] = useState<ReservationRecord | null>(null)
   const [registrationBusy, setRegistrationBusy] = useState(false)
   const [registrationError, setRegistrationError] = useState('')
   const [registeredProtocol, setRegisteredProtocol] = useState('')
-  const [activePage, setActivePage] = useState<'checklist' | 'deliveries' | 'deleted'>('deliveries')
+  const [activePage, setActivePage] = useState<'checklist' | 'deliveries' | 'deleted' | 'reservations'>('deliveries')
   const [deliveriesResetKey, setDeliveriesResetKey] = useState(0)
   const [userEmail, setUserEmail] = useState<string | null>(getLocalSession)
   const [userName, setUserName] = useState<string | null>(getUserName)
@@ -58,7 +66,7 @@ function App() {
   const { deliveries, loadError, loading, addDelivery, saveReturnInspection, deleteDelivery, refresh } = useDeliveries(userEmail, userRole === 'operator')
 
   useEffect(() => {
-    const expireSession = () => { logoutLocalSession(); setUserEmail(null); setUserName(null); setUserRole('operator') }
+    const expireSession = () => { logoutLocalSession(); setUserEmail(null); setUserName(null); setUserRole('operator'); setPendingDelivery(null); setSelectedReservation(null) }
     window.addEventListener('donato-session-expired', expireSession)
     return () => window.removeEventListener('donato-session-expired', expireSession)
   }, [])
@@ -114,33 +122,43 @@ function App() {
     setRegistered(false)
   }
 
-  const registerDelivery = async () => {
+  const beginDeliverySignature = () => {
     if (deliveryBlockers.length || registrationBusy) return
+    setRegistrationError('')
+    setPendingDelivery({
+      ...(selectedReservation ? { reservationId: selectedReservation.id } : {}),
+      assetTag: assetTag.trim(),
+      serialNumber: serialNumber.trim(),
+      recipient: recipient.trim(),
+      recipientEmail: recipientEmail.trim().toLowerCase(),
+      recipientCpf: normalizeCpf(recipientCpf),
+      recipientDepartment: recipientDepartment.trim(),
+      equipment: selectedEquipment.apiName,
+      model: equipmentModel.trim(),
+      brand: equipmentBrand.trim(),
+      accessories: accessories.trim(),
+      parts: parts.map(({ id, label, status, note }) => ({
+        id,
+        label,
+        status: status === 'damaged' ? 'damaged' : 'ok',
+        note: note.trim(),
+      })),
+    })
+  }
+
+  const registerDelivery = async (signature: SignatureInput) => {
+    if (!pendingDelivery || registrationBusy) return
     setRegistrationBusy(true)
     setRegistrationError('')
     try {
-      const saved = await addDelivery({
-        assetTag: assetTag.trim(),
-        serialNumber: serialNumber.trim(),
-        recipient: recipient.trim(),
-        recipientEmail: recipientEmail.trim().toLowerCase(),
-        recipientCpf: normalizeCpf(recipientCpf),
-        recipientDepartment: recipientDepartment.trim(),
-        equipment: selectedEquipment.apiName,
-        model: equipmentModel.trim(),
-        brand: equipmentBrand.trim(),
-        accessories: accessories.trim(),
-        parts: parts.map(({ id, label, status, note }) => ({
-          id,
-          label,
-          status: status === 'damaged' ? 'damaged' : 'ok',
-          note: note.trim(),
-        })),
-      })
+      const saved = await addDelivery({ ...pendingDelivery, signature })
       setRegisteredProtocol(saved.protocol)
       setRegistered(true)
+      setPendingDelivery(null)
+      setSelectedReservation(null)
     } catch (error) {
       setRegistrationError((error as Error).message)
+      throw error
     } finally {
       setRegistrationBusy(false)
     }
@@ -154,11 +172,25 @@ function App() {
     setDeliveriesResetKey((prev) => prev + 1)
   }
 
+  const startReservationInspection = (reservation: ReservationRecord) => {
+    const equipment = equipmentCatalog.find((item) => item.apiName === reservation.equipment)
+    if (!equipment || userRole !== 'admin' || reservation.status !== 'aprovada' || reservation.deliveryId) return
+    changeEquipment(equipment.id)
+    setSelectedReservation(reservation)
+    setAssetTag(''); setSerialNumber(''); setAccessories('')
+    setRecipient(reservation.requesterName); setRecipientEmail(reservation.requesterEmail)
+    setRecipientDepartment(reservation.department); setRecipientCpf(''); setRecipientCpfTouched(false)
+    setPendingDelivery(null); setRegistrationError(''); setRegisteredProtocol('')
+    setActivePage('checklist')
+  }
+
   const logout = () => {
     if (microsoftAuthEnabled) void logoutMicrosoft().catch(() => {
       window.alert('Você saiu do checklist. Não foi possível encerrar a sessão na Microsoft.')
     })
     logoutLocalSession()
+    setSelectedReservation(null)
+    setPendingDelivery(null)
     setUserEmail(null)
     setUserName(null)
     setUserRole('operator')
@@ -222,6 +254,9 @@ function App() {
           >
             <ClipboardList size={17} /><span>{userRole === 'admin' ? 'Entregas' : 'Minhas entregas'}</span>
           </button>
+          <button type="button" className={`side-nav-link ${activePage === 'reservations' ? 'side-nav-link-active' : ''}`} aria-current={activePage === 'reservations' ? 'page' : undefined} onClick={() => setActivePage('reservations')}>
+            <CalendarDays size={17} /><span>{userRole === 'admin' ? 'Solicitações de reserva' : 'Minhas reservas'}</span>
+          </button>
           {!microsoftAuthEnabled && <button
             type="button"
             className="side-nav-link side-nav-security"
@@ -256,7 +291,7 @@ function App() {
         <DeliveriesPage
           key={deliveriesResetKey}
           deliveries={deliveries}
-          onNewDelivery={() => setActivePage('checklist')}
+          onNewDelivery={() => { setSelectedReservation(null); setActivePage('checklist') }}
           onSaveReturn={saveReturnInspection}
           onDeleteDelivery={deleteDelivery}
           isAdmin={userRole === 'admin'}
@@ -265,6 +300,7 @@ function App() {
           hidden={activePage !== 'deliveries'}
         />
         {userRole === 'admin' && <DeletedDeliveriesPage hidden={activePage !== 'deleted'} />}
+        {activePage === 'reservations' && <ReservationsPage key={userEmail} isAdmin={userRole === 'admin'} userName={userName} userEmail={userEmail} onStartInspection={startReservationInspection} />}
         {loading && <p role="status">Carregando entregas...</p>}
         {loadError && <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void refresh()}>Tentar carregar novamente</button></div>}
         <main id="inicio" className="workspace" hidden={activePage !== 'checklist' || userRole !== 'admin'}>
@@ -280,6 +316,7 @@ function App() {
           </div>
         </section>
 
+        {selectedReservation && <div className="confirmation-banner reservation-inspection-banner" role="status"><CalendarDays size={16} /><span>Conferência da reserva de {selectedReservation.requesterName}. O protocolo será vinculado ao registrar a entrega assinada.</span><button type="button" disabled={registrationBusy} onClick={() => { setSelectedReservation(null); setActivePage('reservations') }}>Cancelar conferência</button></div>}
         <fieldset disabled={registrationBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, pointerEvents: registrationBusy ? 'none' : undefined }}>
         <section className="inspection-layout" aria-label="Conferência do equipamento">
           <EquipmentModel equipmentId={equipmentId} parts={parts} selectedPartId={selectedPartId} onSelectPart={setSelectedPartId} />
@@ -303,15 +340,15 @@ function App() {
             <button className="reset-button" type="button" onClick={resetChecklist}><RotateCcw size={14} /> Limpar conferência</button>
           </div>
           <div className="delivery-fields">
-            <label className="data-field equipment-field"><span>Equipamento</span><select value={equipmentId} onChange={(event) => changeEquipment(event.target.value as EquipmentId)}>
+            <label className="data-field equipment-field"><span>Equipamento</span><select disabled={!!selectedReservation} value={equipmentId} onChange={(event) => changeEquipment(event.target.value as EquipmentId)}>
               {equipmentCatalog.map((equipment) => <option key={equipment.id} value={equipment.id}>{equipment.id === 'desktop' ? 'Desktop' : equipment.id === 'phone' ? 'Celular' : equipment.id === 'monitor' ? 'Monitor' : 'Notebook'}</option>)}
             </select></label>
             <label className="data-field"><span>Modelo do equipamento</span><input required value={equipmentModel} onChange={(event) => { setEquipmentModel(event.target.value); setRegistered(false) }} /></label>
             <label className="data-field"><span>Marca</span><input required value={equipmentBrand} onChange={(event) => { setEquipmentBrand(event.target.value); setRegistered(false) }} /></label>
             <label className="data-field"><span>Patrimônio</span><input required value={assetTag} onChange={(event) => { setAssetTag(event.target.value); setRegistered(false) }} /></label>
             <label className="data-field"><span>Número de série</span><input required value={serialNumber} onChange={(event) => { setSerialNumber(event.target.value); setRegistered(false) }} /></label>
-            <label className="data-field recipient-field"><span>Responsável pelo recebimento</span><input required value={recipient} onChange={(event) => { setRecipient(event.target.value); setRegistered(false) }} /></label>
-            <label className="data-field"><span>E-mail do responsável</span><input type="email" autoComplete="email" required value={recipientEmail} onChange={(event) => { setRecipientEmail(event.target.value); setRegistered(false) }} placeholder="exemplo@donatoholhos.com" /></label>
+            <label className="data-field recipient-field"><span>Responsável pelo recebimento</span><input required readOnly={!!selectedReservation} value={recipient} onChange={(event) => { setRecipient(event.target.value); setRegistered(false) }} /></label>
+            <label className="data-field"><span>E-mail do responsável</span><input type="email" autoComplete="email" required readOnly={!!selectedReservation} value={recipientEmail} onChange={(event) => { setRecipientEmail(event.target.value); setRegistered(false) }} placeholder="exemplo@donatoholhos.com" /></label>
             <label className="data-field">
               <span>CPF do responsável</span>
               <input required inputMode="numeric" maxLength={14} value={recipientCpf}
@@ -323,7 +360,7 @@ function App() {
                 {recipientCpf ? 'CPF inválido. Confira os 11 números informados.' : 'Informe o CPF do responsável.'}
               </small>}
             </label>
-            <label className="data-field"><span>Setor do responsável</span><input required value={recipientDepartment} onChange={(event) => { setRecipientDepartment(event.target.value); setRegistered(false) }} placeholder="Ex.: Tecnologia da Informação" /></label>
+            <label className="data-field"><span>Setor do responsável</span><input required readOnly={!!selectedReservation} value={recipientDepartment} onChange={(event) => { setRecipientDepartment(event.target.value); setRegistered(false) }} placeholder="Ex.: Tecnologia da Informação" /></label>
             <div className="data-field date-field"><span>Data da entrega</span><div className="date-value">{new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(appStartDate)}</div></div>
             <label className="data-field accessories-field"><span>Acessórios entregues</span><textarea value={accessories} onChange={(event) => { setAccessories(event.target.value); setRegistered(false) }} placeholder="Ex.: carregador, cabo HDMI, bolsa" rows={2} /></label>
           </div>
@@ -337,7 +374,7 @@ function App() {
             {registered ? (
               <div className="registered-state"><CheckCircle2 size={17} /> Entrega registrada</div>
             ) : (
-              <button className="submit-button" type="button" disabled={deliveryBlockers.length > 0 || registrationBusy || loading} onClick={() => void registerDelivery()}>
+              <button className="submit-button" type="button" disabled={deliveryBlockers.length > 0 || registrationBusy || loading} onClick={beginDeliverySignature}>
                 <Save size={16} /> {registrationBusy ? 'Registrando...' : 'Registrar entrega'}
               </button>
             )}
@@ -359,6 +396,15 @@ function App() {
         <footer className="page-footer"><span>DONATO HOSPITAL DE OLHOS <span className="footer-dot">·</span> CONTROLE DE EQUIPAMENTOS</span></footer>
         </main>
       </div>
+      {pendingDelivery && <SignatureDialog title="Assinatura da entrega" signerName={pendingDelivery.recipient} onCancel={() => setPendingDelivery(null)} onConfirm={registerDelivery}>
+        <p><strong>Responsável:</strong> {pendingDelivery.recipient} · CPF: {formatCpf(pendingDelivery.recipientCpf)}</p>
+        <p><strong>Equipamento:</strong> {pendingDelivery.equipment} · {pendingDelivery.brand} {pendingDelivery.model}</p>
+        <p><strong>Patrimônio:</strong> {pendingDelivery.assetTag} · <strong>Série:</strong> {pendingDelivery.serialNumber}</p>
+        <p><strong>E-mail:</strong> {pendingDelivery.recipientEmail} · <strong>Setor:</strong> {pendingDelivery.recipientDepartment}</p>
+        <p><strong>Acessórios:</strong> {pendingDelivery.accessories || 'Nenhum'}</p>
+        <ul>{pendingDelivery.parts.map((part) => <li key={part.id}>{part.label}: {part.status === 'damaged' ? 'Danificado' : 'Sem danos'}{part.note && ` — ${part.note}`}</li>)}</ul>
+        <p>Declaro que recebi o equipamento nas condições acima e assumo a responsabilidade por sua guarda e utilização.</p>
+      </SignatureDialog>}
       {isPasswordDialogOpen && (
         <div
           className="password-dialog-backdrop"

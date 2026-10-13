@@ -23,7 +23,7 @@ test('CPF valida os dois dígitos verificadores e rejeita valores incompletos, r
   assert.equal(formatCpf('529982'), '529.982')
 })
 
-test('MongoDB preserva registros antigos sem CPF, normaliza novos valores e recusa CPF inválido', async () => {
+test('PostgreSQL preserva registros antigos sem CPF, normaliza novos valores e recusa CPF inválido', async () => {
   const legacy = new Delivery(deliveryData)
   await legacy.validate()
   assert.equal(legacy.recipientCpf, undefined)

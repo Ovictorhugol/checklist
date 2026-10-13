@@ -1,5 +1,6 @@
 import dotenv from 'dotenv'
-import mongoose from 'mongoose'
+import { connectDB } from '../config/db.js'
+import { closeDB } from '../config/postgres.js'
 import bcrypt from 'bcryptjs'
 import { User } from '../models/User.js'
 import { validateEnvironment } from '../config/environment.js'
@@ -12,7 +13,7 @@ async function main(): Promise<void> {
   const mode = process.argv[2]
   if (mode !== '--check' && mode !== '--reset') throw new Error('Use --check ou --reset.')
   validateEnvironment()
-  await mongoose.connect(process.env.MONGO_URI!, { serverSelectionTimeoutMS: 10000 })
+  await connectDB()
   const user = await User.findOne({ email: process.env.ADMIN_EMAIL!.trim().toLowerCase() })
   if (!user) throw new Error('A conta configurada não existe neste banco. Reinicie o backend para criar o administrador.')
   if (user.role !== 'admin') throw new Error('A conta configurada não é administradora. Reinicie o backend para aplicar a configuração.')
@@ -30,6 +31,6 @@ async function main(): Promise<void> {
 
 void main().catch(() => {
   // Erros do driver podem incluir detalhes da conexão; mantenha credenciais fora do terminal.
-  console.error('Não foi possível verificar ou redefinir a conta administradora. Confira a configuração, a existência da conta e o acesso ao MongoDB.')
+  console.error('Não foi possível verificar ou redefinir a conta administradora. Confira a configuração, a existência da conta e o acesso ao PostgreSQL.')
   process.exitCode = 1
-}).finally(async () => { await mongoose.disconnect() })
+}).finally(async () => { await closeDB() })

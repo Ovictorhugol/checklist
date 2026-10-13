@@ -54,7 +54,7 @@ test('Microsoft: configuração dispensa credenciais locais e rotas de senha fic
   Object.assign(process.env, {
     AUTH_PROVIDER: 'microsoft', ENTRA_TENANT_ID: config.tenantId,
     ENTRA_API_CLIENT_ID: config.apiClientId, ENTRA_CLIENT_ID: config.clientId,
-    MONGO_URI: 'mongodb://localhost/test',
+    PGHOST: 'localhost', PGDATABASE: 'test', PGUSER: 'test', PGPASSWORD: 'test-password', PGSSLROOTCERT: 'certs/global-bundle.pem',
   })
   delete process.env.JWT_SECRET
   delete process.env.ADMIN_EMAIL

@@ -1,7 +1,10 @@
+import { validateSignature, recordSignature } from '../domain/signature.js'
 import { allocateProtocol, peekProtocol } from '../services/protocol.js'
 import { validateDeliveryParts, validateReturnParts } from '../domain/inspection.js'
 import type { Response } from 'express'
-import type { ClientSession } from 'mongoose'
+import { isValidRecordId } from '../models/postgresModel.js'
+import { type DatabaseSession } from '../config/postgres.js'
+import { createReservedDelivery, ReservationDeliveryConflict } from '../services/reservationDelivery.js'
 import { Delivery } from '../models/Delivery.js'
 import { DeliveryDeletionAudit } from '../models/DeliveryDeletionAudit.js'
 import type { AuthRequest } from '../middleware/authMiddleware.js'
@@ -62,8 +65,8 @@ export async function getDeletedDeliveries(req: AuthRequest, res: Response): Pro
 
     const audits = await DeliveryDeletionAudit.find().sort({ deletedAt: -1 }).lean()
     res.status(200).json(audits.map((audit) => ({
-      id: audit._id.toString(),
       ...audit,
+      id: audit._id.toString(),
       deliverySnapshot: audit.deliverySnapshot ?? {
         id: audit.deliveryId,
         protocol: audit.protocol || '',
@@ -112,6 +115,10 @@ export async function getDeliveryById(req: AuthRequest, res: Response): Promise<
 
 export async function createDelivery(req: AuthRequest, res: Response): Promise<void> {
   try {
+    const reservationId = req.body.reservationId
+    if (reservationId !== undefined && (typeof reservationId !== 'string' || !isValidRecordId(reservationId))) {
+      res.status(400).json({ error: 'Reserva inválida para vincular à entrega.' }); return
+    }
     const {
       assetTag,
       serialNumber,
@@ -148,9 +155,17 @@ export async function createDelivery(req: AuthRequest, res: Response): Promise<v
       res.status(400).json({ error: (error as Error).message })
       return
     }
+    let validatedSignature
+    try {
+      validatedSignature = validateSignature(req.body.signature)
+      if (validatedSignature.signerName !== recipient.trim()) throw new Error('A assinatura de entrega deve identificar o responsável pelo recebimento.')
+    } catch (error) {
+      res.status(400).json({ error: (error as Error).message })
+      return
+    }
     const protocol = await allocateProtocol()
 
-    const newDelivery = await Delivery.create({
+    const details = {
       protocol,
       assetTag,
       serialNumber,
@@ -158,7 +173,7 @@ export async function createDelivery(req: AuthRequest, res: Response): Promise<v
       recipientEmail: normalizedRecipientEmail,
       recipientCpf: normalizeCpf(recipientCpf),
       recipientDepartment,
-      equipment,
+      equipment: equipment.trim(),
       model,
       brand,
       accessories: typeof accessories === 'string' ? accessories.trim() : '',
@@ -167,12 +182,15 @@ export async function createDelivery(req: AuthRequest, res: Response): Promise<v
       deliveredAt: new Date().toISOString(),
       deliveredBy: req.user?.email || 'Sistema',
       parts: validatedParts,
-    })
+    }
+    const signedDetails = { ...details, ...(reservationId ? { reservationId } : {}), signature: recordSignature(validatedSignature, { ...details, ...(reservationId ? { reservationId } : {}) }, req.user!.email) }
+    const newDelivery = reservationId ? await createReservedDelivery(reservationId, signedDetails) : await Delivery.create(signedDetails)
 
     res.status(201).json(newDelivery.toJSON())
   } catch (error) {
+    if (error instanceof ReservationDeliveryConflict) { res.status(409).json({ error: error.message }); return }
     console.error('Erro ao cadastrar conferência:', error)
-    res.status(500).json({ error: 'Erro interno ao salvar conferência no MongoDB.' })
+    res.status(500).json({ error: 'Erro interno ao salvar conferência no PostgreSQL.' })
   }
 }
 
@@ -201,13 +219,24 @@ export async function saveReturnInspection(req: AuthRequest, res: Response): Pro
       res.status(400).json({ error: 'Informe uma data de devolução válida, posterior à entrega e não futura.' })
       return
     }
+    let validatedSignature
+    try {
+      validatedSignature = validateSignature(req.body.signature)
+    } catch (error) {
+      res.status(400).json({ error: (error as Error).message })
+      return
+    }
     const normalizedDate = new Date(returnDate).toISOString()
+    const signedReturn = recordSignature(validatedSignature, {
+      delivery: typeof delivery.toObject === 'function' ? delivery.toObject() : delivery,
+      returnedAt: normalizedDate, parts: validatedParts,
+    }, req.user!.email)
     // A condição no update impede que duas requisições sobrescrevam a mesma devolução.
     const updated = await Delivery.findOneAndUpdate(
       { _id: id, status: { $ne: 'devolvido' }, isReturned: { $ne: true }, returnInspection: null },
       { $set: {
         status: 'devolvido', isReturned: true, returnedAt: normalizedDate,
-        returnInspection: { returnedAt: normalizedDate, inspectedBy: req.user!.email, parts: validatedParts },
+        returnInspection: { returnedAt: normalizedDate, inspectedBy: req.user!.email, parts: validatedParts, signature: signedReturn },
       } },
       { new: true, runValidators: true }
     )
@@ -218,12 +247,12 @@ export async function saveReturnInspection(req: AuthRequest, res: Response): Pro
     res.status(200).json(updated.toJSON())
   } catch (error) {
     console.error('Erro ao salvar devolução:', error)
-    res.status(500).json({ error: 'Erro interno ao registrar devolução no MongoDB.' })
+    res.status(500).json({ error: 'Erro interno ao registrar devolução no PostgreSQL.' })
   }
 }
 
 export async function deleteDelivery(req: AuthRequest, res: Response): Promise<void> {
-  let session: ClientSession | undefined
+  let session: DatabaseSession | undefined
   try {
     if (!req.user || req.user.role !== 'admin') {
       res.status(403).json({

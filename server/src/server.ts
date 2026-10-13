@@ -5,6 +5,8 @@ import { connectDB } from './config/db.js'
 import { ensureAdminUser } from './config/seedAdmin.js'
 import authRoutes from './routes/authRoutes.js'
 import deliveryRoutes from './routes/deliveryRoutes.js'
+import reservationRoutes from './routes/reservationRoutes.js'
+import { Reservation } from './models/Reservation.js'
 import { validateEnvironment } from './config/environment.js'
 import { initializeProtocolCounters } from './services/protocol.js'
 import { Delivery } from './models/Delivery.js'
@@ -24,6 +26,7 @@ app.use(express.json())
 // Rotas da API
 app.use('/api/auth', authRoutes)
 app.use('/api/deliveries', deliveryRoutes)
+app.use('/api/reservations', reservationRoutes)
 
 // Rota de verificação do status da API
 app.get('/api/health', (_req, res) => {
@@ -34,11 +37,11 @@ app.get('/api/health', (_req, res) => {
   })
 })
 
-// Iniciar servidor e conexão com o MongoDB
+// Iniciar servidor e conexão com o PostgreSQL/RDS
 async function startServer() {
   validateEnvironment()
   await connectDB()
-  await Promise.all([Delivery.init(), ProtocolCounter.init()])
+  await Promise.all([Delivery.init(), ProtocolCounter.init(), Reservation.init()])
   if (!isMicrosoftAuth()) {
     await User.init()
     await ensureAdminUser()

@@ -1,7 +1,7 @@
 {
   "name": "checklist-server",
   "version": "1.0.0",
-  "description": "Backend API com MongoDB e Mongoose para o sistema de Checklist Donato",
+  "description": "Backend API PostgreSQL/RDS para o sistema de Checklist Donato",
   "main": "src/server.ts",
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "test": "tsx --test tests/*.test.ts",
     "admin:check": "tsx src/scripts/adminAccount.ts --check",
-    "admin:reset": "tsx src/scripts/adminAccount.ts --reset"
+    "admin:reset": "tsx src/scripts/adminAccount.ts --reset",
+    "db:check": "tsx src/scripts/checkRds.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
@@ -19,14 +20,14 @@
     "express": "^4.21.2",
     "jose": "^6.2.12",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.5"
+    "pg": "^8.23.1"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.7",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }
