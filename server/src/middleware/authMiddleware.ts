@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import { errors as joseErrors } from 'jose'
-import { IdentityPermissionError, verifyMicrosoftAccessToken } from '../services/microsoftIdentity.js'
+import { IdentityPermissionError, verifyMicrosoftAccessToken } from '../services/auth/microsoftIdentity.js'
 
 export interface AuthRequest extends Request {
   user?: {

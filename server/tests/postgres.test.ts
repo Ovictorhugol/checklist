@@ -1,11 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTestDatabase } from './postgresTestDatabase.js'
+import { createTestDatabase } from './helpers/postgresTestDatabase.js'
 import { getPool } from '../src/config/postgres.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { DeliveryDeletionAudit } from '../src/models/DeliveryDeletionAudit.js'
 import { ProtocolCounter } from '../src/models/ProtocolCounter.js'
-import { allocateProtocol, initializeProtocolCounters, protocolDate } from '../src/services/protocol.js'
+import { allocateProtocol, initializeProtocolCounters, protocolDate } from '../src/services/deliveries/protocol.js'
 import { saveReturnInspection, deleteDelivery } from '../src/controllers/deliveryController.js'
 
 test('PostgreSQL: protocolos concorrentes, exclusões, reinício e devoluções simultâneas', { skip: !process.env.TEST_POSTGRES }, async () => {

@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTestDatabase } from './postgresTestDatabase.js'
+import { createTestDatabase } from './helpers/postgresTestDatabase.js'
 import { getPool } from '../src/config/postgres.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { DeliveryDeletionAudit } from '../src/models/DeliveryDeletionAudit.js'
 import { Reservation } from '../src/models/Reservation.js'
 import { deleteDelivery } from '../src/controllers/deliveryController.js'
-import { restoreArchivedDelivery, DeliveryRestoreError } from '../src/services/restoreDelivery.js'
+import { restoreArchivedDelivery, DeliveryRestoreError } from '../src/services/deliveries/restoreDelivery.js'
 
 const actor = { id: '000000000000000000000001', email: 'admin@example.com', role: 'admin' }
 const response = () => ({ code: 0, status(code: number) { this.code = code; return this }, json() { return this } })

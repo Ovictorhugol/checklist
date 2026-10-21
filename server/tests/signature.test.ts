@@ -1,6 +1,6 @@
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { validateSignature, recordSignature } from '../src/domain/signature.js'
+import { validateSignature, recordSignature } from '../src/domain/signature/signature.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { ProtocolCounter } from '../src/models/ProtocolCounter.js'
 import { createDelivery, saveReturnInspection } from '../src/controllers/deliveryController.js'

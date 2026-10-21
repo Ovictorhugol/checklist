@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { formatCpf, isValidCpf, normalizeCpf } from '../src/domain/cpf.js'
+import { formatCpf, isValidCpf, normalizeCpf } from '../src/domain/validation/cpf.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { createDelivery } from '../src/controllers/deliveryController.js'
 

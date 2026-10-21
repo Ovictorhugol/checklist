@@ -1,7 +1,7 @@
 import { type ModelConfig, timestamps, required, normalizeStrings } from './postgresModel.js'
-import { normalizeCpf, isValidCpf } from '../domain/cpf.js'
+import { normalizeCpf, isValidCpf } from '../domain/validation/cpf.js'
 import { glpiEnabled } from '../config/glpi.js'
-import { getEquipmentName } from '../domain/equipment.js'
+import { getEquipmentName } from '../domain/inspection/equipment.js'
 
 export const deliveryConfig: ModelConfig = {
   table: 'deliveries', columns: {

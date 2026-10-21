@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { runMicrosoftInteraction, performMicrosoftPopupLogin } from '../../src/services/microsoftAuth.js'
+import { runMicrosoftInteraction, performMicrosoftPopupLogin } from '../../src/features/auth/services/microsoftAuth.js'
 import type { AuthenticationResult, AccountInfo, PopupRequest } from '@azure/msal-browser'
 
 test('Microsoft: não inicia um segundo login ou saída enquanto a primeira interação está pendente', async () => {

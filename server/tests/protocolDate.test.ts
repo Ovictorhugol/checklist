@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { protocolDate, allocateProtocol, initializeProtocolCounters } from '../src/services/protocol.js'
+import { protocolDate, allocateProtocol, initializeProtocolCounters } from '../src/services/deliveries/protocol.js'
 import { ProtocolCounter } from '../src/models/ProtocolCounter.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { DeliveryDeletionAudit } from '../src/models/DeliveryDeletionAudit.js'

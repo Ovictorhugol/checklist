@@ -2,10 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { generateKeyPair, exportJWK, createLocalJWKSet, SignJWT } from 'jose'
-import { createMicrosoftVerifier, IdentityPermissionError } from '../src/services/microsoftIdentity.js'
+import { createMicrosoftVerifier, IdentityPermissionError } from '../src/services/auth/microsoftIdentity.js'
 import { validateEnvironment } from '../src/config/environment.js'
 import authRoutes from '../src/routes/authRoutes.js'
-import { setupMicrosoftIdentity } from './microsoftTestIdentity.js'
+import { setupMicrosoftIdentity } from './helpers/microsoftTestIdentity.js'
 
 const config = {
   tenantId: '11111111-1111-1111-1111-111111111111',

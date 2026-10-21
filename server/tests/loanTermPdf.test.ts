@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { generateLoanTermPdf } from '../src/services/loanTermPdf.js'
-import { renderLoanTermContent } from '../src/domain/loanTermHtml.js'
+import { generateLoanTermPdf } from '../src/services/documents/loanTermPdf.js'
+import { renderLoanTermContent } from '../src/domain/loan-term/loanTermHtml.js'
 
 test('termo compartilhado escapa dados e mantém duas vias, campos e assinatura', () => {
   const html = renderLoanTermContent({ recipient: '<img src=x onerror=alert(1)>', accessories: 'Cabo & carregador', deliveredAt: '2026-10-14T01:00:00Z', signature: { signerName: 'Pessoa', strokes: [[{ x: 1, y: 2 }, { x: 3, y: 4 }]], signedAt: '', capturedBy: '', documentHash: '' } })

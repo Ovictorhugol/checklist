@@ -16,6 +16,13 @@ server/backups/
 .env.*
 !.env.example
 
+# Temporary visual test artifacts (must also be deleted after each run)
+previews/
+screenshots/
+test-results/
+playwright-report/
+playwright/.cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

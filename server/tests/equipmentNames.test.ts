@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { equipmentCatalog, getEquipmentName } from '../src/domain/equipment.js'
-import { isInspectionEquipment } from '../src/domain/inspection.js'
+import { equipmentCatalog, getEquipmentName } from '../src/domain/inspection/equipment.js'
+import { isInspectionEquipment } from '../src/domain/inspection/inspection.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { Reservation } from '../src/models/Reservation.js'
 

@@ -8,13 +8,13 @@ import deliveryRoutes from './routes/deliveryRoutes.js'
 import reservationRoutes from './routes/reservationRoutes.js'
 import { Reservation } from './models/Reservation.js'
 import { validateEnvironment } from './config/environment.js'
-import { initializeProtocolCounters } from './services/protocol.js'
+import { initializeProtocolCounters } from './services/deliveries/protocol.js'
 import { Delivery } from './models/Delivery.js'
 import { ProtocolCounter } from './models/ProtocolCounter.js'
 import { getMailConfig, mailEnabled } from './config/mail.js'
-import { startDeliveryEmailWorker } from './services/deliveryEmail.js'
+import { startDeliveryEmailWorker } from './services/mail/deliveryEmail.js'
 import { getGlpiConfig, glpiEnabled } from './config/glpi.js'
-import { startReservationGlpiWorker } from './services/reservationGlpi.js'
+import { startReservationGlpiWorker } from './services/reservations/reservationGlpi.js'
 
 dotenv.config()
 

@@ -1,13 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTestDatabase } from './postgresTestDatabase.js'
+import { createTestDatabase } from './helpers/postgresTestDatabase.js'
 import { getPool } from '../src/config/postgres.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { DeliveryDeletionAudit } from '../src/models/DeliveryDeletionAudit.js'
-import { restoreArchivedDelivery } from '../src/services/restoreDelivery.js'
-import { processNextDeliveryEmail } from '../src/services/deliveryEmail.js'
-import { MailSendError, sendGraphTerm, clearGraphToken } from '../src/services/graphMail.js'
-import { generateLoanTermPdf } from '../src/services/loanTermPdf.js'
+import { restoreArchivedDelivery } from '../src/services/deliveries/restoreDelivery.js'
+import { processNextDeliveryEmail } from '../src/services/mail/deliveryEmail.js'
+import { MailSendError, sendGraphTerm, clearGraphToken } from '../src/services/mail/graphMail.js'
+import { generateLoanTermPdf } from '../src/services/documents/loanTermPdf.js'
 import { getDeliveryEmail, retryDeliveryEmail } from '../src/controllers/deliveryEmailController.js'
 
 const signature = { signerName: 'Pessoa', strokes: [[{ x: 10, y: 40 }, { x: 100, y: 80 }, { x: 150, y: 30 }]], signedAt: '2026-10-13T12:00:00Z', capturedBy: 'admin@example.com', documentHash: 'original-hash' }

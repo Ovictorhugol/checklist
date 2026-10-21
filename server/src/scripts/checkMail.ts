@@ -2,7 +2,7 @@ import dotenv from 'dotenv'
 import { resolve } from 'node:path'
 import { serverRoot } from '../config/postgres.js'
 import { getMailConfig, mailEnabled } from '../config/mail.js'
-import { getGraphMailToken } from '../services/graphMail.js'
+import { getGraphMailToken } from '../services/mail/graphMail.js'
 
 dotenv.config({ path: resolve(serverRoot, '.env'), quiet: true })
 void (async () => {

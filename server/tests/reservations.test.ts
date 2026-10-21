@@ -1,11 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
-import { setupMicrosoftIdentity } from './microsoftTestIdentity.js'
+import { setupMicrosoftIdentity } from './helpers/microsoftTestIdentity.js'
 import { Reservation } from '../src/models/Reservation.js'
 import reservationRoutes from '../src/routes/reservationRoutes.js'
-import { validateReservation } from '../src/domain/reservation.js'
-import { minimumReservationEndDate } from '../src/domain/reservationDates.js'
+import { validateReservation } from '../src/domain/reservation/reservation.js'
+import { minimumReservationEndDate } from '../src/domain/reservation/reservationDates.js'
 
 const payload = { equipment: 'Notebook', requesterName: 'Pessoa Teste', department: 'TI', purpose: 'Treinamento', startDate: '2099-10-06', endDate: '2099-10-08' }
 

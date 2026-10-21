@@ -1,7 +1,7 @@
 import dotenv from 'dotenv'
 import { resolve } from 'node:path'
 import { serverRoot } from '../config/postgres.js'
-import { checkGlpiConnection } from '../services/glpiClient.js'
+import { checkGlpiConnection } from '../services/glpi/glpiClient.js'
 import { glpiEnabled } from '../config/glpi.js'
 
 dotenv.config({ path: resolve(serverRoot, '.env'), quiet: true })

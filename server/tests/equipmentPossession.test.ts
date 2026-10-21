@@ -2,15 +2,15 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { createTestDatabase } from './postgresTestDatabase.js'
+import { createTestDatabase } from './helpers/postgresTestDatabase.js'
 import { getPool, serverRoot } from '../src/config/postgres.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { Reservation } from '../src/models/Reservation.js'
 import { DeliveryDeletionAudit } from '../src/models/DeliveryDeletionAudit.js'
 import { createDelivery, saveReturnInspection, deleteDelivery } from '../src/controllers/deliveryController.js'
-import { createReservedDelivery } from '../src/services/reservationDelivery.js'
-import { restoreArchivedDelivery, DeliveryRestoreError } from '../src/services/restoreDelivery.js'
-import { equipmentPossessionError } from '../src/services/equipmentPossession.js'
+import { createReservedDelivery } from '../src/services/reservations/reservationDelivery.js'
+import { restoreArchivedDelivery, DeliveryRestoreError } from '../src/services/deliveries/restoreDelivery.js'
+import { equipmentPossessionError } from '../src/services/deliveries/equipmentPossession.js'
 
 const actor = { id: '000000000000000000000001', email: 'admin@example.com', role: 'admin' }
 const parts = ['display', 'keyboard', 'touchpad', 'case', 'ports'].map(id => ({ id, label: id, status: 'ok', note: '' }))
@@ -81,7 +81,7 @@ test('RDS: registros duplicados anteriores ficam bloqueados até todas as entreg
     await getPool().query('DROP TRIGGER deliveries_equipment_possession ON checklist_donato.deliveries')
     const first = await Delivery.create({ ...payload, protocol: 'ENT-2026-0001' })
     const second = await Delivery.create({ ...payload, protocol: 'ENT-2026-0002' })
-    await getPool().query(await readFile(resolve(serverRoot, 'sql/005_equipment_possession.sql'), 'utf8'))
+    await getPool().query(await readFile(resolve(serverRoot, 'database/migrations/005_equipment_possession.sql'), 'utf8'))
     await returnDelivery(first.id)
     await assert.rejects(Delivery.create({ ...payload, protocol: 'ENT-2026-10-13-0003' }), activeConflict)
     await returnDelivery(second.id)

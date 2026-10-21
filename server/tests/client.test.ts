@@ -1,11 +1,11 @@
 import { test, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 let tokenError: Error | undefined
-await mock.module('../../src/services/microsoftAuth.ts', { namedExports: { getMicrosoftAccessToken: async () => {
+await mock.module('../../src/features/auth/services/microsoftAuth.ts', { namedExports: { getMicrosoftAccessToken: async () => {
   if (tokenError) throw tokenError
   return 'microsoft-access-token'
 } } })
-const { apiCreateDelivery, apiSaveReturnInspection, apiGetDeliveries } = await import('../../src/services/api.js')
+const { apiCreateDelivery, apiSaveReturnInspection, apiGetDeliveries } = await import('../../src/shared/api/api.js')
 
 const originalFetch = globalThis.fetch
 const session = new Map<string, string>()

@@ -2,7 +2,7 @@ import type { Response } from 'express'
 import { isValidRecordId } from '../models/postgresModel.js'
 import type { AuthRequest } from '../middleware/authMiddleware.js'
 import { Reservation } from '../models/Reservation.js'
-import { validateReservation } from '../domain/reservation.js'
+import { validateReservation } from '../domain/reservation/reservation.js'
 
 export async function listReservations(req: AuthRequest, res: Response): Promise<void> {
   if (!req.user) { res.status(401).json({ error: 'Não autenticado.' }); return }

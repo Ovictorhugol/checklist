@@ -1,14 +1,14 @@
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
-import { setupMicrosoftIdentity, identityConfig } from './microsoftTestIdentity.js'
+import { setupMicrosoftIdentity, identityConfig } from './helpers/microsoftTestIdentity.js'
 import deliveryRoutes from '../src/routes/deliveryRoutes.js'
 import { validateEnvironment } from '../src/config/environment.js'
-import { validateDeliveryParts, validateReturnParts } from '../src/domain/inspection.js'
+import { validateDeliveryParts, validateReturnParts } from '../src/domain/inspection/inspection.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { DeliveryDeletionAudit } from '../src/models/DeliveryDeletionAudit.js'
 import { ProtocolCounter } from '../src/models/ProtocolCounter.js'
-import { initializeProtocolCounters, allocateProtocol, protocolDate } from '../src/services/protocol.js'
+import { initializeProtocolCounters, allocateProtocol, protocolDate } from '../src/services/deliveries/protocol.js'
 import { createDelivery, saveReturnInspection } from '../src/controllers/deliveryController.js'
 
 const signature = { signerName: 'R', strokes: [[{ x: 10, y: 50 }, { x: 150, y: 90 }]] }

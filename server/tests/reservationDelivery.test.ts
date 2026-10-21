@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTestDatabase } from './postgresTestDatabase.js'
+import { createTestDatabase } from './helpers/postgresTestDatabase.js'
 import { Delivery } from '../src/models/Delivery.js'
 import { Reservation } from '../src/models/Reservation.js'
-import { createReservedDelivery, ReservationDeliveryConflict } from '../src/services/reservationDelivery.js'
+import { createReservedDelivery, ReservationDeliveryConflict } from '../src/services/reservations/reservationDelivery.js'
 
 test('entrega de reserva valida aprovação, destinatário e equipamento; falha desfaz o vínculo', async () => {
   const originals = { startSession: Delivery.startSession, create: Delivery.create, update: Reservation.findOneAndUpdate }

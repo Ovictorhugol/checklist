@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { getDeliveryDamageCount, type DeliveryRecord } from '../../src/domain/deliveryTypes.js'
+import { getDeliveryDamageCount, type DeliveryRecord } from '../../src/features/deliveries/types/deliveryTypes.js'
 
 const delivery: DeliveryRecord = {
   id: 'delivery-1', protocol: 'ENT-2026-0001', assetTag: 'A', serialNumber: 'S',

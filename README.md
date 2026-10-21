@@ -97,26 +97,48 @@ Todas as rotas têm o prefixo `/api`. Os endpoints marcados como autenticados ou
 ```text
 .
 ├── public/                       # Arquivos servidos diretamente pelo Vite
-├── src/
-│   ├── app/                       # Composição principal e navegação
-│   ├── components/                # Componentes reutilizáveis e modelo 3D
-│   ├── domain/                    # Tipos e acesso às regras compartilhadas
-│   ├── hooks/                     # Estado e operações de entregas
-│   ├── pages/                     # Login, entregas e auditoria
-│   ├── services/                  # Chamadas HTTP e autenticação
-│   ├── styles/                    # Estilos globais e por tela
-│   └── main.tsx                   # Entrada React
-├── server/src/
-│   ├── config/                    # Conexão PostgreSQL e configuração do Entra ID
-│   ├── controllers/               # Lógica dos endpoints
-│   ├── middleware/                # Autenticação e autorização
-│   ├── models/                    # Modelos PostgreSQL
-│   ├── routes/                    # Rotas Express
-│   └── server.ts                  # Inicialização da API
+├── src/                          # Frontend React
+│   ├── app/                      # Composição principal, navegação e estilos globais
+│   ├── features/                 # Código agrupado por funcionalidade
+│   │   ├── auth/                 # Login, sessão e autenticação Microsoft
+│   │   ├── deliveries/           # Entregas, devoluções e auditoria de exclusões
+│   │   ├── inspection/           # Inspeção de equipamentos e modelo 3D
+│   │   ├── loan-term/            # Visualização e impressão dos termos
+│   │   ├── reservations/         # Reservas de equipamentos
+│   │   ├── signature/            # Captura de assinatura
+│   │   └── theme/                # Seleção e persistência do tema
+│   ├── shared/                   # Recursos usados por várias funcionalidades
+│   │   ├── api/                  # Cliente HTTP da API
+│   │   ├── styles/               # Layout compartilhado entre telas
+│   │   └── utils/                # Utilitários de validação e formatação
+│   └── main.tsx                  # Entrada React
+├── server/
+│   ├── certs/                    # Certificado CA público do RDS
+│   ├── database/migrations/      # Migrações SQL numeradas em ordem de aplicação
+│   ├── src/
+│   │   ├── config/               # Configurações do banco e das integrações
+│   │   ├── controllers/          # Lógica dos endpoints
+│   │   ├── domain/               # Regras por assunto: inspection, loan-term,
+│   │   │                         # reservation, signature e validation
+│   │   ├── middleware/           # Autenticação e autorização
+│   │   ├── models/               # Modelos e persistência PostgreSQL
+│   │   ├── routes/               # Rotas Express
+│   │   ├── scripts/              # Diagnósticos de RDS, e-mail e GLPI
+│   │   ├── services/             # Serviços por assunto: auth, deliveries,
+│   │   │                         # documents, glpi, mail e reservations
+│   │   └── server.ts             # Inicialização da API
+│   └── tests/
+│       ├── helpers/              # Identidade e banco isolado de testes
+│       └── *.test.ts             # Suítes de testes
 ├── index.html
+├── redirect.html                 # Retorno da autenticação Microsoft
 ├── package.json                  # Dependências e scripts do frontend
 └── README.md
 ```
+
+Cada funcionalidade do frontend reúne suas próprias pastas `components`, `pages`, `hooks`, `services`, `styles` e `types`, conforme necessário. Novos arquivos devem ficar junto à funcionalidade responsável; use `shared` para recursos consumidos por várias funcionalidades. Os estilos globais ficam em `src/app/styles`.
+
+No backend, mantenha as camadas existentes e coloque novas regras e serviços na subpasta correspondente ao assunto. Os módulos de domínio consumidos também pelo frontend continuam em `server/src/domain`, com referências diretas para manter uma única implementação. As configurações do Vite, TypeScript e npm permanecem na raiz de cada aplicação; os comandos de instalação, desenvolvimento e build continuam iguais.
 
 O PostgreSQL armazena usuários, entregas, reservas, contadores anuais e auditorias em tabelas no schema `checklist_donato`. IDs de documentos antigos continuam como texto, preservando referências históricas. Cada nova auditoria inclui o snapshot integral da entrega, o ID/e-mail do administrador e o timestamp. Registros de auditoria criados por versões anteriores podem conter somente os campos disponíveis à época.
 
@@ -222,11 +244,11 @@ O formulário exige CPF válido do responsável nas novas entregas. A API grava 
 
 O backend usa PostgreSQL/RDS. Entregas antigas sem CPF podem ser consultadas, devolvidas e arquivadas normalmente. O snapshot de exclusão preserva o CPF quando ele existir.
 
-Para PostgreSQL/RDS, `server/sql/001_checklist_schema.sql` inclui `recipient_cpf` nas instalações novas. Se as tabelas já existirem, execute na conexão PostgreSQL do projeto:
+Para PostgreSQL/RDS, `server/database/migrations/001_checklist_schema.sql` inclui `recipient_cpf` nas instalações novas. Se as tabelas já existirem, execute na conexão PostgreSQL do projeto:
 
 ```sql
 \set ON_ERROR_STOP on
-\i server/sql/002_delivery_recipient_cpf.sql
+\i server/database/migrations/002_delivery_recipient_cpf.sql
 ```
 
 Essa alteração adiciona a coluna no schema `checklist_donato`, aceita `NULL` nos registros antigos e exige 11 dígitos nos valores presentes. A API valida os dígitos verificadores. CPF não tem restrição de unicidade, pois uma pessoa pode receber vários equipamentos. A importação automática cria o schema completo com `001` e `003`; `002` serve apenas para instalações antigas sem a coluna de CPF.
@@ -279,13 +301,13 @@ Em **Excluídas**, o administrador pode usar **Recuperar entrega** e confirmar a
 
 Registros antigos sem snapshot completo não podem ser recuperados automaticamente, e a interface informa essa limitação. Após uma nova exclusão da mesma entrega, a recuperação utiliza o snapshot dessa última exclusão. A rota `POST /api/deliveries/deleted/:auditId/restore` exige autenticação e perfil de administrador.
 
-O script `server/sql/004_restore_deliveries.sql` adiciona os campos de recuperação e já foi aplicado ao RDS configurado. Em outra instalação, execute esse script antes de publicar esta versão da API. Para uma instalação nova, aplique `001_checklist_schema.sql`, `003_rds_backend.sql`, `004_restore_deliveries.sql`, `005_equipment_possession.sql`, `006_delivery_email.sql`, `007_return_email.sql` e `008_reservation_glpi.sql`, nessa ordem.
+O script `server/database/migrations/004_restore_deliveries.sql` adiciona os campos de recuperação e já foi aplicado ao RDS configurado. Em outra instalação, execute esse script antes de publicar esta versão da API. Para uma instalação nova, aplique `001_checklist_schema.sql`, `003_rds_backend.sql`, `004_restore_deliveries.sql`, `005_equipment_possession.sql`, `006_delivery_email.sql`, `007_return_email.sql` e `008_reservation_glpi.sql`, nessa ordem.
 
 ## Bloqueio de equipamentos em posse
 
 Uma entrega nova é recusada quando o patrimônio **ou** o número de série já aparece em uma entrega em posse. A comparação ignora maiúsculas/minúsculas e espaços nas extremidades, preservando os valores originais e zeros iniciais. Após registrar a devolução, os identificadores ficam disponíveis para outro empréstimo, mantendo o histórico anterior.
 
-O script `server/sql/005_equipment_possession.sql` mantém as ocupações no RDS e aplica a regra na mesma transação de cada entrega, inclusive em cadastros simultâneos, reservas e recuperações. A API retorna erro 409 com a identificação do campo bloqueado. Tentativas rejeitadas não gravam entregas nem deixam vínculos de reserva ou bloqueios parciais.
+O script `server/database/migrations/005_equipment_possession.sql` mantém as ocupações no RDS e aplica a regra na mesma transação de cada entrega, inclusive em cadastros simultâneos, reservas e recuperações. A API retorna erro 409 com a identificação do campo bloqueado. Tentativas rejeitadas não gravam entregas nem deixam vínculos de reserva ou bloqueios parciais.
 
 Duplicidades anteriores à implantação são preservadas. Nesses casos, o equipamento permanece bloqueado enquanto houver qualquer entrega dele em posse. O script deve ser aplicado antes de publicar esta versão em outra instância do banco.
 
@@ -293,7 +315,7 @@ O backend valida equipamento, peças únicas, inspeção completa e condições 
 
 ## Envio automático do termo assinado
 
-O backend gera um PDF A4 com os dados, protocolo e traços da assinatura, usando o mesmo HTML, CSS, logotipo, campos e assinatura do botão de impressão. O modelo compartilhado fica em `server/src/domain/loanTermHtml.ts` e `loanTermStyles.ts`; o Chromium aplica o mesmo ajuste de escala para uma página. Na entrega assinada, o anexo inclui somente os dados do requisitante/produto e o termo de responsabilidade, sem as vias de devolução. Na devolução assinada, o anexo inclui somente a **Via do Requisitante** do termo de devolução, com observações, data e assinatura da pessoa que devolve o equipamento. Os dois envios usam o `recipientEmail` da entrega; a impressão continua com o documento completo. O remetente configurado é `ti@donatoholhos.com.br` e o envio usa Microsoft Graph com autenticação de aplicativo. A senha da caixa não é utilizada.
+O backend gera um PDF A4 com os dados, protocolo e traços da assinatura, usando o mesmo HTML, CSS, logotipo, campos e assinatura do botão de impressão. O modelo compartilhado fica em `server/src/domain/loan-term/loanTermHtml.ts` e `loanTermStyles.ts`; o Chromium aplica o mesmo ajuste de escala para uma página. Na entrega assinada, o anexo inclui somente os dados do requisitante/produto e o termo de responsabilidade, sem as vias de devolução. Na devolução assinada, o anexo inclui somente a **Via do Requisitante** do termo de devolução, com observações, data e assinatura da pessoa que devolve o equipamento. Os dois envios usam o `recipientEmail` da entrega; a impressão continua com o documento completo. O remetente configurado é `ti@donatoholhos.com.br` e o envio usa Microsoft Graph com autenticação de aplicativo. A senha da caixa não é utilizada.
 
 Para gerar o PDF no servidor, instale o Chromium do Playwright depois das dependências:
 
@@ -348,7 +370,7 @@ A API REST e a autenticação por token externo devem estar habilitadas no GLPI.
 
 O título dos novos chamados é `Nova Reserva de Equipamento realizada por NOME_DO_SOLICITANTE`, usando o nome da pessoa que solicitou o equipamento. A descrição contém a referência única `[Reserva ID_DA_RESERVA]`. Antes de criar, o backend busca essa referência no título e na descrição para reconhecer tanto os chamados antigos quanto os novos e vincular um chamado existente. Timeout ou erro 5xx durante a criação e processos interrompidos exigem revisão, sem repetir automaticamente o POST. O usuário da API deve enxergar os chamados da entidade para essa verificação funcionar.
 
-O SQL `server/sql/008_reservation_glpi.sql` já foi aplicado ao RDS. Ele adiciona os campos de acompanhamento e a fila `reservation_glpi_jobs`. Não há envio retroativo das reservas existentes. Aprovar, recusar, cancelar ou entregar uma reserva não altera o chamado nesta integração; a automação trata da abertura ao criar a reserva. Em outra instalação, aplique o SQL antes de publicar esta versão, configure as credenciais e reinicie a API. A integração utiliza a [API REST V1 do GLPI](https://help.glpi-project.org/documentation/modules/configuration/general/api/api).
+O SQL `server/database/migrations/008_reservation_glpi.sql` já foi aplicado ao RDS. Ele adiciona os campos de acompanhamento e a fila `reservation_glpi_jobs`. Não há envio retroativo das reservas existentes. Aprovar, recusar, cancelar ou entregar uma reserva não altera o chamado nesta integração; a automação trata da abertura ao criar a reserva. Em outra instalação, aplique o SQL antes de publicar esta versão, configure as credenciais e reinicie a API. A integração utiliza a [API REST V1 do GLPI](https://help.glpi-project.org/documentation/modules/configuration/general/api/api).
 
 ## Testes
 

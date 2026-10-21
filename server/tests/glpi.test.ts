@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createReservationTicket, checkGlpiConnection, GlpiError } from '../src/services/glpiClient.js'
-import { createTestDatabase } from './postgresTestDatabase.js'
+import { createReservationTicket, checkGlpiConnection, GlpiError } from '../src/services/glpi/glpiClient.js'
+import { createTestDatabase } from './helpers/postgresTestDatabase.js'
 import { Reservation } from '../src/models/Reservation.js'
 import { getPool } from '../src/config/postgres.js'
-import { processNextReservationGlpi } from '../src/services/reservationGlpi.js'
+import { processNextReservationGlpi } from '../src/services/reservations/reservationGlpi.js'
 import { retryReservationGlpi } from '../src/controllers/reservationGlpiController.js'
 
 const snapshot = { id: 'aaaaaaaaaaaaaaaaaaaaaaaa', requester_name: 'Pessoa Teste', requester_email: 'pessoa@example.com', department: 'TI', equipment: 'Notebook', purpose: 'Treinamento <script>alert(1)</script>', start_date: '2099-10-06', end_date: '2099-10-08' }
