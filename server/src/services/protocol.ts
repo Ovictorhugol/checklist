@@ -24,7 +24,7 @@ export async function initializeProtocolCounters(): Promise<void> {
   const currentYear = protocolDate().slice(0, 4)
   maxima.set(currentYear, maxima.get(currentYear) ?? 0)
   for (const [year, sequence] of maxima) {
-    await ProtocolCounter.updateOne({ _id: year }, { $max: { sequence } }, { upsert: true })
+    await ProtocolCounter.updateOne({ _id: year }, { $max: { sequence } })
   }
 }
 
@@ -32,9 +32,7 @@ export async function allocateProtocol(deliveredAt = new Date()): Promise<string
   const date = protocolDate(deliveredAt)
   const year = date.slice(0, 4)
   // O UPSERT PostgreSQL incrementa o contador numa única operação atômica.
-  const counter = await ProtocolCounter.findOneAndUpdate(
-    { _id: String(year) }, { $inc: { sequence: 1 } }, { upsert: true, new: true }
-  )
+  const counter = await ProtocolCounter.findOneAndUpdate({ _id: year })
   if (!counter) throw new Error('Não foi possível reservar o protocolo.')
   return `ENT-${date}-${String(counter.sequence).padStart(4, '0')}`
 }

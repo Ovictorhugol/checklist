@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   CheckCircle2,
   CircleAlert,
@@ -6,12 +6,10 @@ import {
   ClipboardList,
   CalendarDays,
   Archive,
-  KeyRound,
   LogOut,
   RotateCcw,
   Save,
   ShieldCheck,
-  X,
 } from 'lucide-react'
 import SignatureDialog from '../components/SignatureDialog'
 import ThemeToggle from '../components/ThemeToggle'
@@ -26,9 +24,8 @@ import ReservationsPage from '../pages/ReservationsPage'
 import LoginScreen from '../pages/LoginScreen'
 import { equipmentCatalog, getInitialParts, type EquipmentId, type EquipmentPart, type InspectionStatus } from '../domain/inspection'
 import { useDeliveries } from '../hooks/useDeliveries'
-import { getLocalSession, getUserName, getUserRole, logoutLocalSession, type AuthUser } from '../services/auth'
-import { apiChangePassword } from '../services/api'
-import { microsoftAuthEnabled, logoutMicrosoft } from '../services/microsoftAuth'
+import { getSessionEmail, getUserName, getUserRole, clearSession, type AuthUser } from '../services/auth'
+import { logoutMicrosoft } from '../services/microsoftAuth'
 import '../styles/App.css'
 import { formatCpf, isValidCpf, normalizeCpf } from '../domain/cpf'
 
@@ -57,18 +54,13 @@ function App() {
   const [registeredProtocol, setRegisteredProtocol] = useState('')
   const [activePage, setActivePage] = useState<'checklist' | 'deliveries' | 'deleted' | 'reservations'>('deliveries')
   const [deliveriesResetKey, setDeliveriesResetKey] = useState(0)
-  const [userEmail, setUserEmail] = useState<string | null>(getLocalSession)
+  const [userEmail, setUserEmail] = useState<string | null>(getSessionEmail)
   const [userName, setUserName] = useState<string | null>(getUserName)
   const [userRole, setUserRole] = useState<'admin' | 'operator'>(getUserRole)
-  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false)
-  const [newPassword, setNewPassword] = useState('')
-  const [passwordError, setPasswordError] = useState('')
-  const [passwordSuccess, setPasswordSuccess] = useState('')
-  const [passwordBusy, setPasswordBusy] = useState(false)
   const { deliveries, loadError, loading, addDelivery, saveReturnInspection, deleteDelivery, refresh } = useDeliveries(userEmail, userRole === 'operator')
 
   useEffect(() => {
-    const expireSession = () => { logoutLocalSession(); setUserEmail(null); setUserName(null); setUserRole('operator'); setPendingDelivery(null); setSelectedReservation(null) }
+    const expireSession = () => { clearSession(); setUserEmail(null); setUserName(null); setUserRole('operator'); setPendingDelivery(null); setSelectedReservation(null) }
     window.addEventListener('donato-session-expired', expireSession)
     return () => window.removeEventListener('donato-session-expired', expireSession)
   }, [])
@@ -141,7 +133,7 @@ function App() {
       recipientEmail: recipientEmail.trim().toLowerCase(),
       recipientCpf: normalizeCpf(recipientCpf),
       recipientDepartment: recipientDepartment.trim(),
-      equipment: selectedEquipment.apiName,
+      equipment: selectedEquipment.name,
       model: equipmentModel.trim(),
       brand: equipmentBrand.trim(),
       accessories: accessories.trim(),
@@ -183,7 +175,7 @@ function App() {
   }
 
   const startReservationInspection = (reservation: ReservationRecord) => {
-    const equipment = equipmentCatalog.find((item) => item.apiName === reservation.equipment)
+    const equipment = equipmentCatalog.find((item) => item.name === reservation.equipment)
     if (!equipment || userRole !== 'admin' || reservation.status !== 'aprovada' || reservation.deliveryId) return
     changeEquipment(equipment.id)
     setSelectedReservation(reservation)
@@ -195,10 +187,10 @@ function App() {
   }
 
   const logout = () => {
-    if (microsoftAuthEnabled) void logoutMicrosoft().catch(() => {
+    void logoutMicrosoft().catch(() => {
       window.alert('Você saiu do checklist. Não foi possível encerrar a sessão na Microsoft.')
     })
-    logoutLocalSession()
+    clearSession()
     setSelectedReservation(null)
     setPendingDelivery(null)
     setUserEmail(null)
@@ -206,32 +198,6 @@ function App() {
     setUserRole('operator')
     setActivePage('deliveries')
     setDeliveriesResetKey((prev) => prev + 1)
-  }
-
-  const closePasswordDialog = () => {
-    if (passwordBusy) return
-    setIsPasswordDialogOpen(false)
-    setNewPassword('')
-    setPasswordError('')
-    setPasswordSuccess('')
-  }
-
-  const submitPasswordChange = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setPasswordBusy(true)
-    setPasswordError('')
-    setPasswordSuccess('')
-
-    try {
-      await apiChangePassword(newPassword)
-      setNewPassword('')
-      setPasswordSuccess('Senha atualizada com sucesso.')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Não foi possível atualizar a senha.'
-      setPasswordError(message === 'Failed to fetch' ? 'Não foi possível conectar ao servidor.' : message)
-    } finally {
-      setPasswordBusy(false)
-    }
   }
 
   if (!userEmail) return <LoginScreen onLogin={handleLogin} />
@@ -267,20 +233,6 @@ function App() {
           <button type="button" className={`side-nav-link ${activePage === 'reservations' ? 'side-nav-link-active' : ''}`} aria-current={activePage === 'reservations' ? 'page' : undefined} onClick={() => setActivePage('reservations')}>
             <CalendarDays size={17} /><span>{userRole === 'admin' ? 'Solicitações de reserva' : 'Minhas reservas'}</span>
           </button>
-          {!microsoftAuthEnabled && <button
-            type="button"
-            className="side-nav-link side-nav-security"
-            aria-label="Alterar senha"
-            title="Alterar senha"
-            onClick={() => {
-              setPasswordError('')
-              setPasswordSuccess('')
-              setNewPassword('')
-              setIsPasswordDialogOpen(true)
-            }}
-          >
-            <KeyRound size={17} /><span>Alterar senha</span>
-          </button>}
           {userRole === 'admin' && (
             <button
               type="button"
@@ -421,54 +373,7 @@ function App() {
         <ul>{pendingDelivery.parts.map((part) => <li key={part.id}>{part.label}: {part.status === 'damaged' ? 'Danificado' : 'Sem danos'}{part.note && ` — ${part.note}`}</li>)}</ul>
         <p>Declaro que recebi o equipamento nas condições acima e assumo a responsabilidade por sua guarda e utilização.</p>
       </SignatureDialog>}
-      {isPasswordDialogOpen && (
-        <div
-          className="password-dialog-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closePasswordDialog()
-          }}
-        >
-          <section className="password-dialog" role="dialog" aria-modal="true" aria-labelledby="password-dialog-title">
-            <header className="password-dialog-heading">
-              <div>
-                <span className="section-kicker">CONTA</span>
-                <h2 id="password-dialog-title">Alterar senha</h2>
-              </div>
-              <button className="password-dialog-close" type="button" onClick={closePasswordDialog} disabled={passwordBusy} aria-label="Fechar">
-                <X size={18} />
-              </button>
-            </header>
-            {passwordSuccess ? (
-              <div className="password-dialog-result">
-                <p className="password-success" role="status"><CheckCircle2 size={16} />{passwordSuccess}</p>
-                <button className="password-save-button" type="button" onClick={closePasswordDialog}>Concluir</button>
-              </div>
-            ) : (
-              <form className="password-dialog-form" onSubmit={submitPasswordChange}>
-                <label className="password-dialog-field">
-                  <span>Nova senha</span>
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={8}
-                    required
-                    autoFocus
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                  />
-                </label>
-                {passwordError && <p className="password-error" role="alert">{passwordError}</p>}
-                <div className="password-dialog-actions">
-                  <button className="password-cancel-button" type="button" onClick={closePasswordDialog} disabled={passwordBusy}>Cancelar</button>
-                  <button className="password-save-button" type="submit" disabled={passwordBusy || newPassword.length < 8}>
-                    {passwordBusy ? 'Salvando...' : 'Salvar senha'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </section>
-        </div>
-      )}
+
     </div>
   )
 }

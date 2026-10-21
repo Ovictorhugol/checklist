@@ -12,7 +12,7 @@ const delivery: DeliveryRecord = {
   id: 'print-fixture', protocol: 'ENT-2026-0002',
   recipient: scenario === 'legacy' ? 'Funcionário de exemplo' : 'Funcionário com nome longo para verificar o alinhamento dos dados do requisitante',
   recipientDepartment: 'Tecnologia da Informação',
-  equipment: 'Celular Samsung Galaxy A36', brand: 'Samsung', model: 'A36',
+  equipment: 'Celular', brand: 'Marca de exemplo', model: 'Modelo de exemplo',
   serialNumber: '1', assetTag: '1',
   accessories: scenario === 'legacy' ? '' : 'Carregador e cabo USB. '.repeat(25),
   deliveredAt: '2026-10-02T12:00:00Z', returnedAt: '2026-10-03T12:00:00Z',

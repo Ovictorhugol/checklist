@@ -7,7 +7,7 @@ import { createDelivery, saveReturnInspection } from '../src/controllers/deliver
 
 const signature = { signerName: 'Responsável', strokes: [[{ x: 10, y: 30 }, { x: 150, y: 80 }, { x: 100, y: 120 }]] }
 const parts = ['display', 'keyboard', 'touchpad', 'case', 'ports'].map((id) => ({ id, label: id, status: 'ok', note: '' }))
-const body = { assetTag: 'A', serialNumber: 'S', recipient: 'Responsável', recipientEmail: 'r@example.com', recipientCpf: '52998224725', recipientDepartment: 'TI', equipment: 'Notebook Dell Latitude 5440', model: 'M', brand: 'B', parts }
+const body = { assetTag: 'A', serialNumber: 'S', recipient: 'Responsável', recipientEmail: 'r@example.com', recipientCpf: '52998224725', recipientDepartment: 'TI', equipment: 'Notebook', model: 'M', brand: 'B', parts }
 const original = { create: Delivery.create, find: Delivery.findById, update: Delivery.findOneAndUpdate, counter: ProtocolCounter.findOneAndUpdate }
 afterEach(() => { Delivery.create = original.create; Delivery.findById = original.find; Delivery.findOneAndUpdate = original.update; ProtocolCounter.findOneAndUpdate = original.counter })
 const response = () => ({ code: 200, data: null as any, status(code: number) { this.code = code; return this }, json(data: any) { this.data = data; return this } })
@@ -58,6 +58,10 @@ test('devolução exige nova assinatura e salva imagem e inspeção na mesma atu
   const unsigned = response()
   await saveReturnInspection({ params: { id: delivery.id }, body: { parts: inspection }, user: { email: 'admin@example.com' } } as any, unsigned as any)
   assert.equal(unsigned.code, 400)
+  assert.equal(writes, 0)
+  const wrongSigner = response()
+  await saveReturnInspection({ params: { id: delivery.id }, body: { parts: inspection, signature: { ...signature, signerName: 'Funcionário da coleta' } }, user: { email: 'admin@example.com' } } as any, wrongSigner as any)
+  assert.equal(wrongSigner.code, 400)
   assert.equal(writes, 0)
   const signed = response()
   await saveReturnInspection({ params: { id: delivery.id }, body: { parts: inspection, signature }, user: { email: 'admin@example.com' } } as any, signed as any)

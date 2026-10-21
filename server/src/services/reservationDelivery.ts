@@ -1,6 +1,7 @@
 import { newId } from '../models/postgresModel.js'
 import { Delivery } from '../models/Delivery.js'
 import { Reservation } from '../models/Reservation.js'
+import { getEquipmentName } from '../domain/equipment.js'
 
 export class ReservationDeliveryConflict extends Error {
   constructor() { super('A reserva deve estar aprovada, sem entrega vinculada, e corresponder ao equipamento, nome, e-mail e setor do solicitante. Atualize a lista de reservas.') }
@@ -15,10 +16,11 @@ export async function createReservedDelivery(reservationId: string, data: Record
     await session.withTransaction(async () => {
       const reservation = await Reservation.findOneAndUpdate({
         _id: reservationId, status: 'aprovada', deliveryId: null,
-        equipment: data.equipment, requesterEmail: data.recipientEmail,
+        requesterEmail: data.recipientEmail,
         requesterName: data.recipient, department: data.recipientDepartment,
-      }, { $set: { deliveryId: deliveryId.toString(), deliveryProtocol: data.protocol } }, { new: true, runValidators: true, session })
+      }, { $set: { deliveryId: deliveryId.toString(), deliveryProtocol: data.protocol } }, { session })
       if (!reservation) throw new ReservationDeliveryConflict()
+      if (getEquipmentName(reservation.equipment) !== data.equipment) throw new ReservationDeliveryConflict()
       const records = await Delivery.create([{ ...data, _id: deliveryId, reservationId }], { session })
       saved = records[0]
     })

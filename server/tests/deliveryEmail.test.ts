@@ -11,7 +11,7 @@ import { generateLoanTermPdf } from '../src/services/loanTermPdf.js'
 import { getDeliveryEmail, retryDeliveryEmail } from '../src/controllers/deliveryEmailController.js'
 
 const signature = { signerName: 'Pessoa', strokes: [[{ x: 10, y: 40 }, { x: 100, y: 80 }, { x: 150, y: 30 }]], signedAt: '2026-10-13T12:00:00Z', capturedBy: 'admin@example.com', documentHash: 'original-hash' }
-const data = { protocol: 'ENT-2026-10-13-0001', assetTag: 'A', serialNumber: 'S', recipient: 'Pessoa', recipientEmail: 'pessoa@example.com', recipientCpf: '52998224725', recipientDepartment: 'TI', equipment: 'Notebook Dell Latitude 5440', model: 'Latitude', brand: 'Dell', accessories: 'Carregador', deliveredAt: '2026-10-13T12:00:00Z', signature, parts: [] }
+const data = { protocol: 'ENT-2026-10-13-0001', assetTag: 'A', serialNumber: 'S', recipient: 'Pessoa', recipientEmail: 'pessoa@example.com', recipientCpf: '52998224725', recipientDepartment: 'TI', equipment: 'Notebook', model: 'Modelo de exemplo', brand: 'Marca de exemplo', accessories: 'Carregador', deliveredAt: '2026-10-13T12:00:00Z', signature, parts: [] }
 
 test('Graph: destinatário e PDF seguem os dados assinados; aceite, limite e falha ambígua são distintos', async () => {
   const original = { ...process.env }

@@ -1,33 +1,10 @@
-.history-page {
-  width: min(1440px, 100%);
-  min-height: calc(100vh - 66px);
-  margin: 0 auto;
-  padding: 37px 5.2vw 22px;
-  box-sizing: border-box;
-}
+@import './PageLayout.css';
 
 .delivery-email-status { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; padding: 14px; margin-bottom: 16px; border: 1px solid var(--theme-border, #dce5ea); border-radius: 6px; background: var(--theme-surface, #fff); color: var(--theme-text, #34423d); font-size: 12px; }
 .delivery-email-status > div { flex: 1; min-width: 180px; }
 .delivery-email-status p { margin: 5px 0 0; color: var(--theme-secondary, #697770); line-height: 1.5; }
 .delivery-email-status button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--accent-border); border-radius: 4px; background: var(--theme-subtle, #f7f9fc); color: var(--accent-strong); cursor: pointer; font: inherit; }
 .delivery-email-status button:disabled { opacity: .5; cursor: wait; }
-
-.history-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  margin-bottom: 23px;
-}
-
-.history-heading h1 {
-  margin: 0;
-  color: var(--theme-text, #1d2925);
-  font-size: 27px;
-  font-weight: 650;
-  line-height: 1.2;
-}
-
-.history-heading p { margin-top: 6px; color: var(--theme-secondary, #7d8983); font-size: 12px; }
 
 .history-new-button {
   min-height: 36px;
@@ -71,7 +48,6 @@
 .history-metric .metric-warning { color: var(--theme-red, #b45b45); }
 .history-metric .metric-possession-value { color: var(--theme-blue, #0878b9); }
 .history-metric .metric-returned-value { color: var(--theme-green, #1a7f4b); }
-.latest-metric strong { font-size: 12px; }
 
 .history-content {
   border: 1px solid var(--theme-border, #e2e8e3);
@@ -170,7 +146,16 @@
 .history-filter button.filter-active { background: var(--theme-surface, #fff); color: var(--accent-strong); box-shadow: 0 1px 3px #26332d15; }
 
 .delivery-table-wrap { overflow-x: auto; }
-.delivery-table { width: 100%; border-collapse: collapse; text-align: left; }
+.delivery-table { width: 100%; table-layout: fixed; border-collapse: collapse; text-align: left; }
+.delivery-table col:nth-child(1) { width: 16%; }
+.delivery-table col:nth-child(2) { width: 11%; }
+.delivery-table col:nth-child(3) { width: 12%; }
+.delivery-table col:nth-child(4) { width: 22%; }
+.delivery-table col:nth-child(5) { width: 17%; }
+.delivery-table col:nth-child(6) { width: 11%; }
+.delivery-table col:nth-child(7) { width: 11%; }
+.delivery-table .table-primary, .delivery-table .table-secondary { overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 741px) { .delivery-table { min-width: 1040px; } }
 .delivery-table thead { background: var(--theme-surface, #fafbfa); }
 .delivery-table th { height: 34px; padding: 0 13px; color: var(--theme-secondary, #8a9690); font-size: 8px; font-weight: 750; letter-spacing: 0.055em; white-space: nowrap; }
 .delivery-table th:first-child, .delivery-table td:first-child { padding-left: 18px; }
@@ -178,7 +163,6 @@
 .delivery-table tbody tr.delivery-row { border-top: 1px solid var(--theme-border, #edf0ed); }
 .delivery-row > td { height: 59px; padding: 8px 13px; vertical-align: middle; }
 .delivery-row:hover { background: var(--theme-surface, #fbfcfb); }
-.row-expanded { background: var(--theme-surface, #fbfcfb); }
 .table-primary, .table-secondary { display: block; white-space: nowrap; }
 .table-primary { color: var(--theme-text, #35423c); font-size: 10px; font-weight: 620; }
 .table-secondary { margin-top: 3px; color: var(--theme-muted, #929e97); font-size: 9px; }
@@ -344,32 +328,32 @@
 
 }
 
-@media (min-width: 1600px) {
-  .history-page { padding-right: 74px; padding-left: 74px; }
-}
-
 @media (max-width: 980px) {
-  .history-page { padding-right: 28px; padding-left: 28px; }
   .history-tools { align-items: flex-start; flex-direction: column; }
   .history-controls { width: 100%; }
   .history-search { width: min(320px, 42vw); }
 }
 
 @media (max-width: 740px) {
-  .history-page { min-height: calc(100vh - 58px); padding: 27px 16px 18px; }
-  .history-heading { align-items: flex-start; gap: 12px; flex-direction: column; margin-bottom: 17px; }
-  .history-heading h1 { font-size: 22px; }
   .history-new-button { min-height: 33px; }
   .history-metrics { grid-template-columns: 1fr 1fr; }
   .history-metric { min-height: 70px; padding: 0 12px; }
   .history-metric:nth-child(2) { border-right: 0; }
-  .latest-metric { grid-column: 1 / -1; min-height: 61px; border-top: 1px solid var(--theme-border, #edf0ed); }
   .history-tools { padding: 13px 12px; }
   .history-controls { align-items: stretch; flex-direction: column; gap: 7px; }
   .history-search { width: 100%; height: 35px; }
   .history-filter { width: fit-content; }
   .history-filter button { padding: 0 9px; }
-  .delivery-table thead { display: none; }
+  .delivery-table col:nth-child(1) { width: 16%; }
+.delivery-table col:nth-child(2) { width: 11%; }
+.delivery-table col:nth-child(3) { width: 12%; }
+.delivery-table col:nth-child(4) { width: 22%; }
+.delivery-table col:nth-child(5) { width: 17%; }
+.delivery-table col:nth-child(6) { width: 11%; }
+.delivery-table col:nth-child(7) { width: 11%; }
+.delivery-table .table-primary, .delivery-table .table-secondary { overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 741px) { .delivery-table { min-width: 1040px; } }
+.delivery-table thead { display: none; }
   .delivery-table, .delivery-table tbody, .delivery-table tr.delivery-row, .delivery-table td { display: block; width: 100%; box-sizing: border-box; }
   .delivery-row { position: relative; padding: 11px 12px 10px; }
   .delivery-row > td { height: auto; padding: 4px 0; }
@@ -393,7 +377,6 @@
 }
 
 @media (max-width: 390px) {
-  .history-page { padding-right: 12px; padding-left: 12px; }
   .history-filter button { padding: 0 7px; font-size: 8px; }
   .delivery-row > td[data-label="Equipamento"], .delivery-row > td[data-label="Situação"], .delivery-row > td[data-label="Responsável"], .delivery-row > td[data-label="Data da entrega"], .delivery-row > td[data-label="Condição"] { width: 100%; }
 }

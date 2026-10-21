@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { getPool, DatabaseSession } from '../config/postgres.js'
 
 type Data = Record<string, any>
-type Options = { session?: DatabaseSession; new?: boolean; runValidators?: boolean; upsert?: boolean }
+type Options = { session?: DatabaseSession }
 export interface ModelConfig {
   table: string
   columns: Record<string, string>
@@ -95,13 +95,6 @@ export function createPostgresModel(config: ModelConfig) {
       catch (error) { return error as Error }
     }
     async validate(): Promise<void> { const error = this.validateSync(); if (error) throw error }
-    async save(): Promise<this> {
-      await this.validate()
-      const saved = await RecordModel.findOneAndUpdate({ _id: this.id }, { $set: this.toObject() }, { new: true })
-      if (!saved) throw new Error('Registro não encontrado para atualizar.')
-      Object.assign(this, saved.toObject())
-      return this
-    }
     async deleteOne(options: Options = {}): Promise<void> {
       await database(options.session).query(`DELETE FROM ${table} WHERE id = $1`, [this.id])
     }
@@ -172,5 +165,5 @@ export function required(data: Data, fields: string[]): void {
   for (const field of fields) if (typeof data[field] !== 'string' || !data[field].trim()) throw new Error(`Campo obrigatório: ${field}`)
 }
 export function normalizeStrings(data: Data, lower: string[] = []): void {
-  for (const [key, value] of Object.entries(data)) if (typeof value === 'string' && key !== 'passwordHash') data[key] = lower.includes(key) ? value.trim().toLowerCase() : value.trim()
+  for (const [key, value] of Object.entries(data)) if (typeof value === 'string') data[key] = lower.includes(key) ? value.trim().toLowerCase() : value.trim()
 }

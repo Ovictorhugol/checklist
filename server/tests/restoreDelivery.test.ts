@@ -10,7 +10,7 @@ import { restoreArchivedDelivery, DeliveryRestoreError } from '../src/services/r
 
 const actor = { id: '000000000000000000000001', email: 'admin@example.com', role: 'admin' }
 const response = () => ({ code: 0, status(code: number) { this.code = code; return this }, json() { return this } })
-const payload = { protocol: 'ENT-2026-10-13-0042', assetTag: 'A', serialNumber: 'S', recipient: 'Pessoa', recipientEmail: 'pessoa@example.com', recipientDepartment: 'TI', equipment: 'Celular Samsung Galaxy A36', model: 'A36', brand: 'Samsung', recipientCpf: '52998224725', parts: [{ id: 'display', label: 'Tela', status: 'ok', note: 'Original' }], signature: { signerName: 'Pessoa', strokes: [[{ x: 10, y: 50 }, { x: 150, y: 90 }]], signedAt: '2026-10-13T12:00:00Z', capturedBy: actor.email, documentHash: 'original-hash' } }
+const payload = { protocol: 'ENT-2026-10-13-0042', assetTag: 'A', serialNumber: 'S', recipient: 'Pessoa', recipientEmail: 'pessoa@example.com', recipientDepartment: 'TI', equipment: 'Celular', model: 'Modelo de exemplo', brand: 'Marca de exemplo', recipientCpf: '52998224725', parts: [{ id: 'display', label: 'Tela', status: 'ok', note: 'Original' }], signature: { signerName: 'Pessoa', strokes: [[{ x: 10, y: 50 }, { x: 150, y: 90 }]], signedAt: '2026-10-13T12:00:00Z', capturedBy: actor.email, documentHash: 'original-hash' } }
 async function archive(id: string) {
   const res = response()
   await deleteDelivery({ params: { id }, user: actor } as any, res as any)

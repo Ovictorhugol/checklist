@@ -1,13 +1,8 @@
 import { type ModelConfig, timestamps, required, normalizeStrings } from './postgresModel.js'
 import { normalizeCpf, isValidCpf } from '../domain/cpf.js'
+import { glpiEnabled } from '../config/glpi.js'
+import { getEquipmentName } from '../domain/equipment.js'
 
-export const userConfig: ModelConfig = {
-  table: 'users', columns: { _id: 'id', email: 'email', passwordHash: 'password_hash', name: 'name', role: 'role', ...timestamps },
-  defaults: () => ({ name: '', role: 'operator' }),
-  normalize: data => normalizeStrings(data, ['email']),
-  validate: data => { required(data, ['email', 'passwordHash']); if (!['operator', 'admin'].includes(data.role)) throw new Error('Perfil inválido.') },
-  serialize: data => { delete data.passwordHash; return data },
-}
 export const deliveryConfig: ModelConfig = {
   table: 'deliveries', columns: {
     _id: 'id', protocol: 'protocol', reservationId: 'reservation_id', assetTag: 'asset_tag', serialNumber: 'serial_number',
@@ -22,14 +17,16 @@ export const deliveryConfig: ModelConfig = {
     required(data, ['protocol', 'assetTag', 'serialNumber', 'recipient', 'recipientEmail', 'recipientDepartment', 'equipment', 'model', 'brand'])
     if (data.recipientCpf != null && !isValidCpf(data.recipientCpf)) throw new Error('Informe um CPF válido para o responsável.')
   },
+  serialize: data => { data.equipment = getEquipmentName(data.equipment); return data },
 }
 export const reservationConfig: ModelConfig = {
   table: 'reservations', columns: {
     _id: 'id', equipment: 'equipment', requesterName: 'requester_name', requesterEmail: 'requester_email', department: 'department', purpose: 'purpose',
     startDate: 'start_date', endDate: 'end_date', status: 'status', reviewedBy: 'reviewed_by', reviewedAt: 'reviewed_at', reviewNote: 'review_note',
-    deliveryId: 'delivery_id', deliveryProtocol: 'delivery_protocol', ...timestamps,
+    deliveryId: 'delivery_id', deliveryProtocol: 'delivery_protocol', glpiTicketId: 'glpi_ticket_id', glpiTicketUrl: 'glpi_ticket_url', glpiStatus: 'glpi_status', glpiError: 'glpi_error', ...timestamps,
   }, dates: ['reviewedAt'], defaults: () => ({ status: 'pendente' }), normalize: data => normalizeStrings(data, ['requesterEmail']),
   validate: data => required(data, ['equipment', 'requesterName', 'requesterEmail', 'department', 'purpose', 'startDate', 'endDate']),
+  serialize: data => { data.equipment = getEquipmentName(data.equipment); data.glpiEnabled = glpiEnabled(); return data },
 }
 export const auditConfig: ModelConfig = {
   table: 'delivery_deletion_audits', columns: {

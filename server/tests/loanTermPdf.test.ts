@@ -42,6 +42,10 @@ test('anexos separam responsabilidade da entrega e somente a via do requisitante
   assert.ok(returnHtml.includes('14/10/2026'))
   assert.ok(!returnHtml.includes('TERMO DE RESPONSABILIDADE'))
   assert.ok(!returnHtml.includes('Assinante da entrega'))
+  const holderHtml = renderLoanTermContent({ ...delivery, recipient: delivery.returnInspection.signature.signerName }, 'return')
+  assert.ok(holderHtml.includes('Assinatura do Funcionário Responsável pela Devolução:'))
+  assert.ok(!holderHtml.includes('Assinatura do Funcionário Responsável pelo Recebimento:'))
+  assert.ok(returnHtml.includes('Assinatura do Funcionário Responsável pelo Recebimento:'))
   for (const type of ['delivery', 'return'] as const) {
     const pdf = await generateLoanTermPdf(delivery, type)
     assert.equal(pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)?.length, 1)

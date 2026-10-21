@@ -2,12 +2,16 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { CalendarDays, RefreshCw } from 'lucide-react'
 import { equipmentCatalog } from '../domain/inspection'
 import type { NewReservation, ReservationRecord, ReservationStatus } from '../domain/reservation'
-import { apiCreateReservation, apiGetReservations, apiUpdateReservation } from '../services/api'
+import { apiCreateReservation, apiGetReservations, apiUpdateReservation, apiRetryReservationGlpi } from '../services/api'
 import '../styles/ReservationsPage.css'
+import { minimumReservationEndDate } from '../../server/src/domain/reservationDates'
+
+type ReservationForm = Omit<NewReservation, 'requesterName'>
 
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
 const formatDate = (value: string) => new Intl.DateTimeFormat('pt-BR').format(new Date(`${value}T12:00:00`))
 const statusLabels: Record<ReservationStatus, string> = { pendente: 'Pendente', aprovada: 'Aprovada', recusada: 'Recusada', cancelada: 'Cancelada' }
+const glpiLabels = { pending: 'Aguardando abertura do chamado', processing: 'Abrindo chamado no GLPI', created: 'Chamado aberto', failed: 'Falha ao abrir chamado', review: 'Abertura do chamado precisa de verificação' }
 
 export default function ReservationsPage({ isAdmin, userName, userEmail, onStartInspection }: { isAdmin: boolean; userName: string | null; userEmail: string; onStartInspection: (reservation: ReservationRecord) => void }) {
   const [records, setRecords] = useState<ReservationRecord[]>([])
@@ -20,7 +24,10 @@ export default function ReservationsPage({ isAdmin, userName, userEmail, onStart
   const [statusFilter, setStatusFilter] = useState<ReservationStatus | ''>('')
   const [search, setSearch] = useState('')
   const [notes, setNotes] = useState<Record<string, string>>({})
-  const [form, setForm] = useState<NewReservation>({ equipment: equipmentCatalog[0].apiName, requesterName: userName || '', department: '', purpose: '', startDate: today(), endDate: today() })
+  const [form, setForm] = useState<ReservationForm>(() => {
+    const startDate = today()
+    return { equipment: equipmentCatalog[0].name, department: '', purpose: '', startDate, endDate: minimumReservationEndDate(startDate) }
+  })
 
   useEffect(() => {
     let active = true
@@ -31,13 +38,28 @@ export default function ReservationsPage({ isAdmin, userName, userEmail, onStart
     return () => { active = false }
   }, [reload])
 
+  useEffect(() => {
+    if (!records.some(record => record.glpiEnabled && (record.glpiStatus === 'pending' || record.glpiStatus === 'processing'))) return
+    const timer = setTimeout(() => setReload(value => value + 1), 10000)
+    return () => clearTimeout(timer)
+  }, [records])
+
+  const retryGlpi = async (record: ReservationRecord) => {
+    if (saving.current) return
+    if (record.glpiStatus === 'review' && !window.confirm(`Confira no GLPI se já existe um chamado com a referência [Reserva ${record.id}] antes de tentar novamente. Deseja continuar?`)) return
+    saving.current = true; setBusy(true); setError(''); setSuccess('')
+    try { await apiRetryReservationGlpi(record.id); setSuccess('Nova tentativa de abertura do chamado programada.'); setReload(value => value + 1) }
+    catch (caught) { setError((caught as Error).message) }
+    finally { saving.current = false; setBusy(false) }
+  }
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (saving.current || loading) return
     saving.current = true
     setBusy(true); setError(''); setSuccess('')
     try {
-      const record = await apiCreateReservation(form)
+      const record = await apiCreateReservation({ ...form, requesterName: userName?.trim() || userEmail.trim() })
       setRecords((current) => [record, ...current])
       setSuccess('Solicitação enviada. Aguarde a análise do administrador.')
       setForm((current) => ({ ...current, purpose: '' }))
@@ -61,8 +83,8 @@ export default function ReservationsPage({ isAdmin, userName, userEmail, onStart
 
   const visible = records.filter((record) => (!statusFilter || record.status === statusFilter) &&
     `${record.requesterName} ${record.requesterEmail} ${record.department} ${record.equipment} ${record.deliveryProtocol || ''}`.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')))
-  const equipmentName = (value: string) => equipmentCatalog.find((item) => item.apiName === value)?.name || value
-  const field = (key: keyof NewReservation, value: string) => setForm((current) => ({ ...current, [key]: value }))
+  const equipmentName = (value: string) => equipmentCatalog.find((item) => item.name === value)?.name || value
+  const field = (key: keyof ReservationForm, value: string) => setForm((current) => ({ ...current, [key]: value }))
 
   return <main className="reservations-page">
     <header className="reservations-heading">
@@ -77,12 +99,16 @@ export default function ReservationsPage({ isAdmin, userName, userEmail, onStart
       <form onSubmit={(event) => void submit(event)}>
         <fieldset disabled={busy || loading}>
           <div className="reservation-fields">
-            <label>Equipamento<select aria-label="Equipamento" value={form.equipment} onChange={(event) => field('equipment', event.target.value)}>{equipmentCatalog.map((item) => <option key={item.id} value={item.apiName}>{item.name}</option>)}</select></label>
-            <label>Nome do solicitante<input required maxLength={160} autoComplete="name" value={form.requesterName} onChange={(event) => field('requesterName', event.target.value)} /></label>
+            <label>Equipamento<select aria-label="Equipamento" value={form.equipment} onChange={(event) => field('equipment', event.target.value)}>{equipmentCatalog.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></label>
+            <label>Nome do solicitante<input readOnly autoComplete="name" value={userName?.trim() || userEmail.trim()} /></label>
             <label>E-mail da conta<input value={userEmail} readOnly type="email" /></label>
             <label>Setor<input required maxLength={160} value={form.department} onChange={(event) => field('department', event.target.value)} /></label>
-            <label>Início do uso<input required type="date" min={today()} value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value, endDate: current.endDate < event.target.value ? event.target.value : current.endDate }))} /></label>
-            <label>Fim do uso<input required type="date" min={form.startDate || today()} value={form.endDate} onChange={(event) => field('endDate', event.target.value)} /></label>
+            <label>Início do uso<input required type="date" min={today()} value={form.startDate} onChange={(event) => {
+              const startDate = event.target.value
+              const minimumEndDate = minimumReservationEndDate(startDate)
+              setForm(current => ({ ...current, startDate, endDate: minimumEndDate && current.endDate < minimumEndDate ? minimumEndDate : current.endDate }))
+            }} /></label>
+            <label>Fim do uso<input required type="date" min={minimumReservationEndDate(form.startDate || today())} value={form.endDate} onChange={(event) => field('endDate', event.target.value)} /><small>Mínimo de 1 dia após o início.</small></label>
             <label className="reservation-purpose">Finalidade / observações<textarea required maxLength={2000} rows={3} value={form.purpose} onChange={(event) => field('purpose', event.target.value)} placeholder="Descreva para que precisa do equipamento." /></label>
           </div>
           <div className="reservation-form-actions"><button type="submit" className="reservation-primary">{busy ? 'Salvando...' : 'Solicitar reserva'}</button></div>
@@ -98,6 +124,13 @@ export default function ReservationsPage({ isAdmin, userName, userEmail, onStart
         <header><h3>{equipmentName(record.equipment)}</h3><span className={`reservation-status reservation-status-${record.status}`}>{statusLabels[record.status]}</span></header>
         <dl><div><dt>Solicitante</dt><dd>{record.requesterName}<small>{record.requesterEmail}</small></dd></div><div><dt>Setor</dt><dd>{record.department}</dd></div><div><dt>Período de uso</dt><dd>{formatDate(record.startDate)} a {formatDate(record.endDate)}</dd></div><div><dt>Solicitada em</dt><dd>{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(record.createdAt))}</dd></div></dl>
         <p className="reservation-description">{record.purpose}</p>
+        {record.glpiStatus && <div className="reservation-glpi" role="status">
+          <strong>{glpiLabels[record.glpiStatus]}</strong>
+          {record.glpiTicketId && record.glpiTicketUrl && <a href={record.glpiTicketUrl} target="_blank" rel="noopener noreferrer">Ver chamado #{record.glpiTicketId} no GLPI</a>}
+          {isAdmin && record.glpiError && <p>{record.glpiError}</p>}
+          {isAdmin && !record.glpiEnabled && record.glpiStatus !== 'created' && <p>A integração GLPI está desativada.</p>}
+          {isAdmin && record.glpiEnabled && ['failed', 'review'].includes(record.glpiStatus) && <button type="button" disabled={busy || loading} onClick={() => void retryGlpi(record)}>Tentar abrir chamado novamente</button>}
+        </div>}
         {record.deliveryProtocol && <p className="reservation-delivery"><strong>Protocolo de entrega:</strong> {record.deliveryProtocol}</p>}
         {record.status === 'recusada' && <p className="reservation-reason"><strong>Justificativa da recusa:</strong> {record.reviewNote || 'Justificativa não registrada.'}</p>}
         {record.reviewedBy && <p className="reservation-review">Atualizada por {record.reviewedBy}{record.status !== 'recusada' && record.reviewNote && `: ${record.reviewNote}`}</p>}

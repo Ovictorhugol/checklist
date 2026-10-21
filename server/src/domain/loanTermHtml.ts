@@ -1,6 +1,7 @@
 import { formatCpf } from './cpf.js'
 import type { SignatureRecord } from './signatureTypes.js'
 import { responsibilityIntro, responsibilities, returnDeclarations } from './loanTerm.js'
+import { getEquipmentName } from './equipment.js'
 
 export type LoanTermData = {
   protocol?: string; recipientDepartment?: string; recipient?: string; recipientCpf?: string
@@ -27,6 +28,8 @@ const eye = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="
 export function renderLoanTermContent(delivery: LoanTermData, mode: LoanTermMode = 'full'): string {
   const accessories = delivery.accessories?.trim()
   const returnDate = delivery.returnedAt || delivery.returnInspection?.returnedAt
+  const legacyReceiverSignature = delivery.returnInspection?.signature && delivery.returnInspection.signature.signerName.trim() !== delivery.recipient?.trim()
+  const returnSignerLabel = legacyReceiverSignature ? 'Assinatura do Funcionário Responsável pelo Recebimento:' : 'Assinatura do Funcionário Responsável pela Devolução:'
   const observations = (delivery.returnInspection?.parts ?? []).filter(part => part.returnedStatus === 'damaged' && part.note.trim()).map(part => `${part.label}: ${part.note.trim()}`).join('; ')
   const deliveryContent = `<header class="loan-term-header">
     <div class="loan-term-brand">${eye}<strong>DONATO</strong></div>
@@ -37,7 +40,7 @@ export function renderLoanTermContent(delivery: LoanTermData, mode: LoanTermMode
     <div class="loan-term-recipient-row">${field('Nome do Funcionário:', delivery.recipient)}${field('CPF:', delivery.recipientCpf ? formatCpf(delivery.recipientCpf) : '')}</div>
   </div></section>
   <section class="loan-term-section"><h3>DADOS DO PRODUTO</h3><div class="loan-term-fields">
-    <div class="loan-term-product-row">${field('Marca/Modelo:', [delivery.equipment, delivery.brand, delivery.model].filter(Boolean).join(' '))}${field('Nº Série:', delivery.serialNumber)}</div>
+    <div class="loan-term-product-row">${field('Marca/Modelo:', [getEquipmentName(delivery.equipment || ''), delivery.brand, delivery.model].filter(Boolean).join(' '))}${field('Nº Série:', delivery.serialNumber)}</div>
     ${field('Patrimônio:', delivery.assetTag)}${field('Acessórios:', accessories)}
     <div class="loan-term-accessory-check"><span><i>${accessories ? '✓' : ''}</i> Sim</span><div></div></div>
     <div class="loan-term-accessory-check"><span><i>${accessories ? '' : '✓'}</i> Não</span><div></div></div>
@@ -50,7 +53,7 @@ export function renderLoanTermContent(delivery: LoanTermData, mode: LoanTermMode
     <h3>TERMO DE DEVOLUÇÃO ${copy ? '<em>(Via do Requisitante)</em>' : ''}</h3>
     <div class="loan-term-prose">${returnDeclarations.map(text => `<p>${escape(text)}</p>`).join('')}</div>
     <div class="loan-term-observations"><span>Observações:</span><strong>${escape(observations) || ' '}</strong></div>
-    <div class="loan-term-signatures"><div><span>Assinatura do Funcionário Responsável pelo Recebimento:</span>${signature(delivery.returnInspection?.signature)}</div><div><span>Data da Devolução:</span><strong>${date(returnDate)}</strong></div></div>
+    <div class="loan-term-signatures"><div><span>${returnSignerLabel}</span>${signature(delivery.returnInspection?.signature)}</div><div><span>Data da Devolução:</span><strong>${date(returnDate)}</strong></div></div>
   </section>`).join('')
   return mode === 'delivery' ? deliveryContent : mode === 'return' ? returnContent : deliveryContent + returnContent
 }

@@ -17,7 +17,7 @@ export async function createReservation(req: AuthRequest, res: Response): Promis
   if (!req.user) { res.status(401).json({ error: 'Não autenticado.' }); return }
   if (req.user.role === 'admin') { res.status(403).json({ error: 'Administradores gerenciam as reservas; a solicitação é exclusiva dos usuários.' }); return }
   let data: ReturnType<typeof validateReservation>
-  try { data = validateReservation(req.body) }
+  try { data = validateReservation({ ...req.body, requesterName: req.user.name?.trim() || req.user.email.trim() }) }
   catch (error) { res.status(400).json({ error: (error as Error).message }); return }
   try {
     const record = await Reservation.create({ ...data, requesterEmail: req.user.email.trim().toLowerCase(), status: 'pendente' })
@@ -44,7 +44,7 @@ export async function updateReservation(req: AuthRequest, res: Response): Promis
   try {
     const record = await Reservation.findOneAndUpdate(filter, { $set: {
       status, reviewNote: reviewNote.trim(), reviewedBy: req.user.email.trim().toLowerCase(), reviewedAt: new Date().toISOString(),
-    } }, { new: true, runValidators: true })
+    } })
     if (!record) { res.status(409).json({ error: 'Reserva indisponível ou já atualizada. Atualize a lista antes de tentar novamente.' }); return }
     res.json(record.toJSON())
   } catch { res.status(500).json({ error: 'Não foi possível atualizar a reserva.' }) }

@@ -5,6 +5,7 @@ import { generateKeyPair, exportJWK, createLocalJWKSet, SignJWT } from 'jose'
 import { createMicrosoftVerifier, IdentityPermissionError } from '../src/services/microsoftIdentity.js'
 import { validateEnvironment } from '../src/config/environment.js'
 import authRoutes from '../src/routes/authRoutes.js'
+import { setupMicrosoftIdentity } from './microsoftTestIdentity.js'
 
 const config = {
   tenantId: '11111111-1111-1111-1111-111111111111',
@@ -49,16 +50,17 @@ test('Microsoft: assinatura, validade, emissor, audience, tenant, cliente, scope
   await assert.rejects(() => new SignJWT(missingExpiry).setProtectedHeader({ alg: 'RS256', kid: 'test-key' }).sign(privateKey).then(verify))
 })
 
-test('Microsoft: configuração dispensa credenciais locais e rotas de senha ficam bloqueadas', async () => {
+test('Microsoft: configuração dispensa credenciais locais e rotas locais não existem', async () => {
   const original = { ...process.env }
   Object.assign(process.env, {
-    AUTH_PROVIDER: 'microsoft', ENTRA_TENANT_ID: config.tenantId,
+    ENTRA_TENANT_ID: config.tenantId,
     ENTRA_API_CLIENT_ID: config.apiClientId, ENTRA_CLIENT_ID: config.clientId,
     PGHOST: 'localhost', PGDATABASE: 'test', PGUSER: 'test', PGPASSWORD: 'test-password', PGSSLROOTCERT: 'certs/global-bundle.pem',
   })
   delete process.env.JWT_SECRET
   delete process.env.ADMIN_EMAIL
   delete process.env.ADMIN_PASSWORD
+  const identity = await setupMicrosoftIdentity()
   const app = express()
   app.use(express.json())
   app.use('/api/auth', authRoutes)
@@ -72,10 +74,24 @@ test('Microsoft: configuração dispensa credenciais locais e rotas de senha fic
     const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/auth`
     for (const [method, path] of [['POST', '/login'], ['POST', '/register'], ['PATCH', '/password']]) {
       const response = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json' }, body: '{}' })
-      assert.equal(response.status, 403)
+      assert.equal(response.status, 404)
     }
     assert.equal((await fetch(base + '/me')).status, 401)
+    const token = await identity.sign({ email: 'admin@example.com', role: 'admin' })
+    const profile = await fetch(base + '/me', { headers: { Authorization: `Bearer ${token}` } })
+    assert.equal(profile.status, 200)
+    assert.deepEqual((await profile.json()).user, {
+      id: `${config.tenantId}:test-user`, email: 'admin@example.com', role: 'admin',
+    })
+    // Obsolete environment settings must never enable the former local verifier.
+    process.env.AUTH_PROVIDER = 'local'
+    process.env.JWT_SECRET = 'legacy-secret-with-more-than-32-characters'
+    const legacyToken = await new SignJWT({ id: 'local-user', email: 'admin@example.com', role: 'admin' })
+      .setProtectedHeader({ alg: 'HS256' }).setExpirationTime('5m')
+      .sign(new TextEncoder().encode(process.env.JWT_SECRET))
+    assert.equal((await fetch(base + '/me', { headers: { Authorization: `Bearer ${legacyToken}` } })).status, 401)
   } finally {
+    identity.restore()
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
     process.env = original
   }

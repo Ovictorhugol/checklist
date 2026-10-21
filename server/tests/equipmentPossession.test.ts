@@ -15,7 +15,7 @@ import { equipmentPossessionError } from '../src/services/equipmentPossession.js
 const actor = { id: '000000000000000000000001', email: 'admin@example.com', role: 'admin' }
 const parts = ['display', 'keyboard', 'touchpad', 'case', 'ports'].map(id => ({ id, label: id, status: 'ok', note: '' }))
 const signature = { signerName: 'Pessoa', strokes: [[{ x: 10, y: 50 }, { x: 150, y: 90 }]] }
-const payload = { assetTag: 'PC-001', serialNumber: 'SERIAL-001', recipient: 'Pessoa', recipientEmail: 'pessoa@example.com', recipientCpf: '52998224725', recipientDepartment: 'TI', equipment: 'Notebook Dell Latitude 5440', model: 'Latitude', brand: 'Dell', parts, signature }
+const payload = { assetTag: 'PC-001', serialNumber: 'SERIAL-001', recipient: 'Pessoa', recipientEmail: 'pessoa@example.com', recipientCpf: '52998224725', recipientDepartment: 'TI', equipment: 'Notebook', model: 'Modelo de exemplo', brand: 'Marca de exemplo', parts, signature }
 const response = () => ({ code: 0, data: null as any, status(code: number) { this.code = code; return this }, json(data: any) { this.data = data; return this } })
 const activeConflict = (error: unknown) => !!equipmentPossessionError(error)
 const returnDelivery = async (id: string) => {

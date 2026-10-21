@@ -11,6 +11,7 @@ import type { AuthRequest } from '../middleware/authMiddleware.js'
 import { isValidCpf, normalizeCpf } from '../domain/cpf.js'
 import { restoreArchivedDelivery, DeliveryRestoreError, isRestorableSnapshot } from '../services/restoreDelivery.js'
 import { equipmentPossessionError } from '../services/equipmentPossession.js'
+import { getEquipmentName } from '../domain/equipment.js'
 
 export async function getAllDeliveries(req: AuthRequest, res: Response): Promise<void> {
   return listDeliveries(req, res, req.user?.role !== 'admin')
@@ -70,7 +71,7 @@ export async function getDeletedDeliveries(req: AuthRequest, res: Response): Pro
       ...audit,
       id: audit._id.toString(),
       canRestore: !audit.restoredAt && isRestorableSnapshot(audit.deliverySnapshot),
-      deliverySnapshot: audit.deliverySnapshot ?? {
+      deliverySnapshot: audit.deliverySnapshot ? { ...audit.deliverySnapshot, equipment: getEquipmentName(audit.deliverySnapshot.equipment || '') } : {
         id: audit.deliveryId,
         protocol: audit.protocol || '',
         assetTag: audit.assetTag || '',
@@ -228,6 +229,7 @@ export async function saveReturnInspection(req: AuthRequest, res: Response): Pro
     let validatedSignature
     try {
       validatedSignature = validateSignature(req.body.signature)
+      if (validatedSignature.signerName !== delivery.recipient.trim()) throw new Error('A assinatura da devolução deve identificar a pessoa que estava em posse do equipamento.')
     } catch (error) {
       res.status(400).json({ error: (error as Error).message })
       return
@@ -243,8 +245,7 @@ export async function saveReturnInspection(req: AuthRequest, res: Response): Pro
       { $set: {
         status: 'devolvido', isReturned: true, returnedAt: normalizedDate,
         returnInspection: { returnedAt: normalizedDate, inspectedBy: req.user!.email, parts: validatedParts, signature: signedReturn },
-      } },
-      { new: true, runValidators: true }
+      } }
     )
     if (!updated) {
       res.status(409).json({ error: 'Esta entrega já foi devolvida ou removida. Atualize a lista.' })

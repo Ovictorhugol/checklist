@@ -1,4 +1,5 @@
 import { isInspectionEquipment } from './inspection.js'
+import { minimumReservationEndDate } from './reservationDates.js'
 
 export function validateReservation(input: unknown, today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())) {
   if (!input || typeof input !== 'object') throw new Error('Informe os dados da reserva.')
@@ -17,6 +18,8 @@ export function validateReservation(input: unknown, today = new Intl.DateTimeFor
   for (const date of [startDate, endDate]) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) throw new Error('Informe datas válidas para a reserva.')
   }
-  if (startDate < today || endDate < startDate) throw new Error('O início deve ser hoje ou posterior, e o fim deve ser igual ou posterior ao início.')
+  if (startDate < today) throw new Error('O início deve ser hoje ou posterior.')
+  const minimumEndDate = minimumReservationEndDate(startDate)
+  if (!minimumEndDate || endDate < minimumEndDate) throw new Error('O fim do uso deve ser pelo menos 1 dia após o início.')
   return { equipment: data.equipment, requesterName, department, purpose, startDate, endDate }
 }

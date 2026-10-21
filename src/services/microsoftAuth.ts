@@ -1,6 +1,5 @@
 import type { PublicClientApplication } from '@azure/msal-browser'
 
-export const microsoftAuthEnabled = import.meta.env?.VITE_AUTH_PROVIDER === 'microsoft'
 let clientPromise: Promise<PublicClientApplication> | undefined
 let interactionInProgress = false
 

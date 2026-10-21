@@ -2,7 +2,7 @@ import type { IDeliveryPart, IReturnInspectionPart } from '../models/Delivery.js
 import { equipmentCatalog } from './equipment.js'
 
 const equipmentParts: Record<string, string[]> = Object.fromEntries(
-  equipmentCatalog.map((equipment) => [equipment.apiName, equipment.parts.map((part) => part.id)])
+  equipmentCatalog.map((equipment) => [equipment.name, equipment.parts.map((part) => part.id)])
 )
 
 const text = (value: unknown): value is string => typeof value === 'string' && !!value.trim()

@@ -7,5 +7,5 @@ export const responsibilities = [
 ]
 export const returnDeclarations = [
   'Pelo presente Termo de Devolução, o funcionário acima qualificado declara que devolveu o equipamento e acessórios acima especificados, de propriedade do Instituto Donato de Oftalmologia LTDA, nas mesmas condições em que os recebeu.',
-  'O funcionário abaixo identificado declara que recebeu o(s) equipamento(s) com todos acessórios (se aplicável) em devolução em perfeitas condições, ressalvadas as observações abaixo.',
+  'Os equipamentos e acessórios devolvidos apresentam as condições registradas na conferência, ressalvadas as observações abaixo.',
 ]

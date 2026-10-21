@@ -1,27 +1,19 @@
 import type { DeletedDeliveryAudit, DeliveryRecord, NewDelivery, ReturnInspectionInput } from '../domain/deliveryTypes'
 import type { NewReservation, ReservationRecord, ReservationStatus } from '../domain/reservation'
-import { microsoftAuthEnabled, getMicrosoftAccessToken } from './microsoftAuth'
+import { getMicrosoftAccessToken } from './microsoftAuth'
 
-const tokenKey = 'donato-auth-token'
-export const getAuthToken = () => sessionStorage.getItem(tokenKey)
-export const setAuthToken = (token: string) => sessionStorage.setItem(tokenKey, token)
-export const clearAuthToken = () => sessionStorage.removeItem(tokenKey)
+type AuthProfile = { email: string; name?: string; role: 'admin' | 'operator' }
 
-type AuthResponse = { token: string; user: { email: string; name?: string; role: 'admin' | 'operator' } }
-
-async function request<T>(path: string, method = 'GET', body?: unknown, authenticated = true): Promise<T> {
+async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  let token = getAuthToken()
-  if (authenticated && microsoftAuthEnabled) {
-    try {
-      token = await getMicrosoftAccessToken()
-    } catch (error) {
-      clearAuthToken()
-      window.dispatchEvent(new Event('donato-session-expired'))
-      throw error
-    }
+  let token: string
+  try {
+    token = await getMicrosoftAccessToken()
+  } catch (error) {
+    window.dispatchEvent(new Event('donato-session-expired'))
+    throw error
   }
-  if (authenticated && token) headers.Authorization = `Bearer ${token}`
+  if (token) headers.Authorization = `Bearer ${token}`
   let response: Response
   try {
     response = await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
@@ -29,8 +21,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown, authenti
     throw new Error('Não foi possível conectar ao servidor. Nenhuma gravação foi confirmada. Tente novamente após verificar a conexão.')
   }
   const data = await response.json().catch(() => null)
-  if (authenticated && response.status === 401) {
-    clearAuthToken()
+  if (response.status === 401) {
     window.dispatchEvent(new Event('donato-session-expired'))
   }
   if (!response.ok || data === null) {
@@ -39,18 +30,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown, authenti
   return data as T
 }
 
-export async function apiRegister(email: string, password: string, name?: string) {
-  const data = await request<AuthResponse>('/auth/register', 'POST', { email, password, name }, false)
-  setAuthToken(data.token)
-  return data
-}
-export async function apiLogin(email: string, password: string) {
-  const data = await request<AuthResponse>('/auth/login', 'POST', { email, password }, false)
-  setAuthToken(data.token)
-  return data
-}
-export const apiChangePassword = (newPassword: string) => request<{ message: string }>('/auth/password', 'PATCH', { newPassword })
-export const apiGetProfile = () => request<{ user: AuthResponse['user'] }>('/auth/me')
+export const apiGetProfile = () => request<{ user: AuthProfile }>('/auth/me')
 export const apiGetDeliveries = () => request<DeliveryRecord[]>('/deliveries')
 export const apiGetMyDeliveries = () => request<DeliveryRecord[]>('/deliveries/mine')
 export const apiGetDeletedDeliveries = () => request<DeletedDeliveryAudit[]>('/deliveries/deleted')
@@ -66,4 +46,5 @@ export const apiSaveReturnInspection = (id: string, inspection: ReturnInspection
 export const apiDeleteDelivery = (id: string) => request<{ message: string }>(`/deliveries/${id}`, 'DELETE')
 export const apiGetReservations = () => request<ReservationRecord[]>('/reservations')
 export const apiCreateReservation = (data: NewReservation) => request<ReservationRecord>('/reservations', 'POST', data)
+export const apiRetryReservationGlpi = (id: string) => request<{ message: string }>(`/reservations/${id}/glpi/retry`, 'POST')
 export const apiUpdateReservation = (id: string, status: Exclude<ReservationStatus, 'pendente'>, reviewNote = '') => request<ReservationRecord>(`/reservations/${id}`, 'PATCH', { status, reviewNote })

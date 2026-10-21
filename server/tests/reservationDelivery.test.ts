@@ -8,7 +8,7 @@ import { createReservedDelivery, ReservationDeliveryConflict } from '../src/serv
 test('entrega de reserva valida aprovação, destinatário e equipamento; falha desfaz o vínculo', async () => {
   const originals = { startSession: Delivery.startSession, create: Delivery.create, update: Reservation.findOneAndUpdate }
   const reservationId = '000000000000000000000001'
-  let reservation: Record<string, any> = { status: 'aprovada', equipment: 'Celular Samsung Galaxy A36', requesterEmail: 'pessoa@example.com', requesterName: 'Pessoa', department: 'TI' }
+  let reservation: Record<string, any> = { status: 'aprovada', equipment: 'Celular', requesterEmail: 'pessoa@example.com', requesterName: 'Pessoa', department: 'TI' }
   let failDelivery = false
   let creations = 0
   let ended = 0
@@ -24,7 +24,7 @@ test('entrega de reserva valida aprovação, destinatário e equipamento; falha 
     assert.equal(options.session, session)
     assert.equal(filter._id, reservationId)
     assert.equal(filter.deliveryId, null)
-    if (reservation.status !== filter.status || reservation.deliveryId || reservation.equipment !== filter.equipment || reservation.requesterEmail !== filter.requesterEmail || reservation.requesterName !== filter.requesterName || reservation.department !== filter.department) return null
+    if (reservation.status !== filter.status || reservation.deliveryId || reservation.requesterEmail !== filter.requesterEmail || reservation.requesterName !== filter.requesterName || reservation.department !== filter.department) return null
     Object.assign(reservation, update.$set)
     return reservation
   }) as any
@@ -36,7 +36,7 @@ test('entrega de reserva valida aprovação, destinatário e equipamento; falha 
   }) as any
   const payload = { equipment: reservation.equipment, recipientEmail: reservation.requesterEmail, recipient: reservation.requesterName, recipientDepartment: reservation.department, protocol: 'ENT-2026-0001' }
   try {
-    for (const change of [{ recipient: 'Outra pessoa' }, { recipientDepartment: 'Outro setor' }, { recipientEmail: 'outra@example.com' }, { equipment: 'Notebook Dell Latitude 5440' }]) {
+    for (const change of [{ recipient: 'Outra pessoa' }, { recipientDepartment: 'Outro setor' }, { recipientEmail: 'outra@example.com' }, { equipment: 'Notebook' }]) {
       await assert.rejects(createReservedDelivery(reservationId, { ...payload, ...change }), ReservationDeliveryConflict)
     }
     for (const status of ['pendente', 'recusada', 'cancelada']) {
@@ -64,8 +64,8 @@ test('PostgreSQL: vínculo atômico, entrega única por reserva e rollback', { s
   const database = await createTestDatabase()
   try {
     await Promise.all([Delivery.init(), Reservation.init()])
-    const reservation = await Reservation.create({ equipment: 'Celular Samsung Galaxy A36', requesterName: 'Pessoa', requesterEmail: 'pessoa@example.com', department: 'TI', purpose: 'Uso', startDate: '2099-01-01', endDate: '2099-01-02', status: 'aprovada' })
-    const payload = { equipment: reservation.equipment, recipientEmail: reservation.requesterEmail, recipient: 'Pessoa', recipientDepartment: 'TI', assetTag: 'TESTE', serialNumber: 'TESTE', model: 'A36', brand: 'Samsung', parts: [], protocol: 'ENT-2099-0001' }
+    const reservation = await Reservation.create({ equipment: 'Celular Marca de exemplo Modelo de exemplo', requesterName: 'Pessoa', requesterEmail: 'pessoa@example.com', department: 'TI', purpose: 'Uso', startDate: '2099-01-01', endDate: '2099-01-02', status: 'aprovada' })
+    const payload = { equipment: 'Celular', recipientEmail: reservation.requesterEmail, recipient: 'Pessoa', recipientDepartment: 'TI', assetTag: 'TESTE', serialNumber: 'TESTE', model: 'Modelo de exemplo', brand: 'Marca de exemplo', parts: [], protocol: 'ENT-2099-0001' }
     const results = await Promise.allSettled([createReservedDelivery(reservation.id, payload), createReservedDelivery(reservation.id, { ...payload, protocol: 'ENT-2099-0002' })])
     assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1)
     assert.equal(await Delivery.countDocuments({ reservationId: reservation.id }), 1)

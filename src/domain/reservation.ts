@@ -18,4 +18,9 @@ export interface ReservationRecord extends NewReservation {
   reviewNote?: string
   deliveryId?: string
   deliveryProtocol?: string
+  glpiEnabled?: boolean
+  glpiStatus?: 'pending' | 'processing' | 'created' | 'failed' | 'review' | null
+  glpiTicketId?: number | null
+  glpiTicketUrl?: string | null
+  glpiError?: string | null
 }

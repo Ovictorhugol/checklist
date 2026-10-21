@@ -1,7 +1,6 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
-import { authenticateLocalAccount, authenticateMicrosoftAccount, type AuthUser } from '../services/auth'
-import { microsoftAuthEnabled } from '../services/microsoftAuth'
+import { useRef, useState } from 'react'
+import { ArrowRight } from 'lucide-react'
+import { authenticateMicrosoftAccount, type AuthUser } from '../services/auth'
 import '../styles/LoginScreen.css'
 import ThemeToggle from '../components/ThemeToggle'
 
@@ -10,26 +9,9 @@ type LoginScreenProps = {
 }
 
 function LoginScreen({ onLogin }: LoginScreenProps) {
-  const [createAccount, setCreateAccount] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const microsoftLoginBusy = useRef(false)
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setError('')
-    setBusy(true)
-    try {
-      onLogin(await authenticateLocalAccount(email, password, createAccount))
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Não foi possível entrar.')
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const signInMicrosoft = async () => {
     if (microsoftLoginBusy.current) return
@@ -56,29 +38,16 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
         </a>
         <div className="login-heading">
           <span className="login-eyebrow">CONTROLE DE ATIVOS</span>
-          <h1 id="login-title">{createAccount ? 'Criar acesso' : 'Acesse sua conta'}</h1>
-          <p>{createAccount ? 'Cadastre sua conta para acessar o sistema.' : 'Entre para continuar a conferência dos equipamentos.'}</p>
+          <h1 id="login-title">Acesse sua conta</h1>
+          <p>Entre para continuar a conferência dos equipamentos.</p>
         </div>
-        {microsoftAuthEnabled ? (
-          <div className="login-form">
-            <p>Use sua conta Microsoft corporativa para acessar o sistema.</p>
-            {error && <p className="login-error" role="alert">{error}</p>}
-            <button className="login-submit" type="button" disabled={busy} onClick={() => void signInMicrosoft()}>
-              {busy ? 'Aguarde...' : 'Entrar com Microsoft'} <ArrowRight size={16} />
-            </button>
-          </div>
-        ) : <>
-        <div className="login-tabs" role="tablist" aria-label="Acesso">
-          <button type="button" role="tab" aria-selected={!createAccount} className={!createAccount ? 'login-tab-active' : ''} onClick={() => { setCreateAccount(false); setError('') }}>Entrar</button>
-          <button type="button" role="tab" aria-selected={createAccount} className={createAccount ? 'login-tab-active' : ''} onClick={() => { setCreateAccount(true); setError('') }}>Criar conta</button>
-        </div>
-        <form className="login-form" onSubmit={submit}>
-          <label className="login-field"><span>E-mail</span><span className="login-input-wrap"><Mail size={16} /><input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="exemplo@donatoholhos.com" /></span></label>
-          <label className="login-field"><span>Senha</span><span className="login-input-wrap"><LockKeyhole size={16} /><input type={showPassword ? 'text' : 'password'} autoComplete={createAccount ? 'new-password' : 'current-password'} minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" /><button className="password-toggle" type="button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span></label>
+        <div className="login-form">
+          <p>Use sua conta Microsoft corporativa para acessar o sistema.</p>
           {error && <p className="login-error" role="alert">{error}</p>}
-          <button className="login-submit" type="submit" disabled={busy}>{busy ? 'Aguarde...' : createAccount ? 'Criar conta' : 'Entrar'} <ArrowRight size={16} /></button>
-        </form>
-        </>}
+          <button className="login-submit" type="button" disabled={busy} onClick={() => void signInMicrosoft()}>
+            {busy ? 'Aguarde...' : 'Entrar com Microsoft'} <ArrowRight size={16} />
+          </button>
+        </div>
       </section>
     </main>
   )

@@ -158,12 +158,12 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
 
   return (
     <main id="entregas" className="history-page" hidden={hidden}>
-      {pendingReturn && selectedDelivery && <SignatureDialog title="Assinatura da devolução" signerName={personalName || ''} editableName onCancel={() => setPendingReturn(null)} onConfirm={saveReturn}>
+      {pendingReturn && selectedDelivery && <SignatureDialog title="Assinatura da devolução" signerName={selectedDelivery.recipient.trim()} onCancel={() => setPendingReturn(null)} onConfirm={saveReturn}>
         <p><strong>Protocolo:</strong> {selectedDelivery.protocol} · <strong>Patrimônio:</strong> {selectedDelivery.assetTag}</p>
         <p><strong>Equipamento:</strong> {selectedDelivery.equipment} · <strong>Responsável pela entrega:</strong> {selectedDelivery.recipient}</p>
-        <p>A assinatura deve ser feita pelo responsável do hospital que recebe e confere o equipamento.</p>
+        <p>A assinatura deve ser feita pela pessoa que estava em posse do equipamento e está realizando a devolução.</p>
         <ul>{pendingReturn.parts.map((part) => <li key={part.id}>{part.label}: {part.returnedStatus === 'damaged' ? 'Danificado' : 'Sem danos'}{part.note && ` — ${part.note}`}</li>)}</ul>
-        <p>Declaro que recebi o equipamento em devolução nas condições da inspeção acima, ressalvadas as observações registradas.</p>
+        <p>Declaro que devolvi o equipamento nas condições da inspeção acima, ressalvadas as observações registradas.</p>
       </SignatureDialog>}
       {returnError && <p role="alert">{returnError}</p>}
       {selectedDelivery ? (
@@ -450,6 +450,9 @@ function DeliveriesPage({ deliveries, onNewDelivery, onSaveReturn, onDeleteDeliv
             {visibleDeliveries.length ? (
               <div className="delivery-table-wrap">
                 <table className="delivery-table">
+                  <colgroup>
+                    <col /><col /><col /><col /><col /><col /><col />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th>PROTOCOLO</th>

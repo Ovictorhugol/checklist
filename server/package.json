@@ -8,26 +8,22 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "tsx --test tests/*.test.ts",
-    "admin:check": "tsx src/scripts/adminAccount.ts --check",
-    "admin:reset": "tsx src/scripts/adminAccount.ts --reset",
+    "test": "node --import tsx --experimental-test-module-mocks --test tests/*.test.ts",
     "db:check": "tsx src/scripts/checkRds.ts",
-    "mail:check": "tsx src/scripts/checkMail.ts"
+    "mail:check": "tsx src/scripts/checkMail.ts",
+    "glpi:check": "tsx src/scripts/checkGlpi.ts"
   },
   "dependencies": {
-    "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jose": "^6.2.12",
-    "jsonwebtoken": "^9.0.2",
     "pg": "^8.23.1",
     "playwright": "^1.64.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.7",
     "@types/pg": "^8.23.1",
     "tsx": "^4.19.2",

@@ -1,5 +1,5 @@
 import type { SignatureInput, SignatureRecord } from './signature'
-export type DeliveryPartRecord = {
+type DeliveryPartRecord = {
   id: string
   label: string
   status: 'ok' | 'damaged'
@@ -14,7 +14,7 @@ export type ReturnInspectionPart = {
   note: string
 }
 
-export type ReturnInspectionRecord = {
+type ReturnInspectionRecord = {
   returnedAt: string
   inspectedBy?: string
   signature?: SignatureRecord
@@ -23,7 +23,7 @@ export type ReturnInspectionRecord = {
 
 export type ReturnInspectionInput = Omit<ReturnInspectionRecord, 'signature'> & { signature: SignatureInput }
 
-export type DeliveryStatus = 'entregue' | 'devolvido'
+type DeliveryStatus = 'entregue' | 'devolvido'
 
 export type DeliveryRecord = {
   id: string

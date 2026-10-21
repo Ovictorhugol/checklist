@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
-import jwt from 'jsonwebtoken'
+import { setupMicrosoftIdentity } from './microsoftTestIdentity.js'
 import deliveryRoutes from '../src/routes/deliveryRoutes.js'
 import { Delivery } from '../src/models/Delivery.js'
 
@@ -9,8 +9,7 @@ test('operador consulta somente entregas destinadas ao seu e-mail e não acessa 
   const originalEnv = { ...process.env }
   const originalFind = Delivery.find
   const originalFindById = Delivery.findById
-  const secret = 'personal-deliveries-test-secret-longer-than-32-characters'
-  Object.assign(process.env, { AUTH_PROVIDER: 'local', JWT_SECRET: secret })
+  const identity = await setupMicrosoftIdentity()
   const records = [
     { id: 'own', recipientEmail: 'operator@example.com', deliveredBy: 'admin@example.com' },
     { id: 'other', recipientEmail: 'other@example.com', deliveredBy: 'operator@example.com' },
@@ -34,9 +33,9 @@ test('operador consulta somente entregas destinadas ao seu e-mail e não acessa 
   try {
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/deliveries`
-    const token = (role: string) => jwt.sign({ id: 'user-id', email: ' Operator@Example.com ', role }, secret, { expiresIn: '5m' })
-    const request = (path: string, role = 'operator', method = 'GET') => fetch(base + path, {
-      method, headers: { Authorization: `Bearer ${token(role)}`, 'Content-Type': 'application/json' },
+    const token = (role: string) => identity.sign({ id: 'user-id', email: ' Operator@Example.com ', role })
+    const request = async (path: string, role = 'operator', method = 'GET') => fetch(base + path, {
+      method, headers: { Authorization: `Bearer ${await token(role)}`, 'Content-Type': 'application/json' },
       body: method === 'POST' || method === 'PUT' ? '{}' : undefined,
     })
     for (const path of ['', '/mine', '?recipientEmail=other@example.com', '/mine?email=other@example.com&status=devolvido']) {
@@ -57,6 +56,7 @@ test('operador consulta somente entregas destinadas ao seu e-mail e não acessa 
     assert.equal((await request('/other', 'admin')).status, 200)
     assert.equal((await fetch(base + '/mine')).status, 401)
   } finally {
+    identity.restore()
     server.closeAllConnections()
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
     Delivery.find = originalFind

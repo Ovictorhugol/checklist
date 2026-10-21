@@ -1,7 +1,7 @@
 import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
-import jwt from 'jsonwebtoken'
+import { setupMicrosoftIdentity, identityConfig } from './microsoftTestIdentity.js'
 import deliveryRoutes from '../src/routes/deliveryRoutes.js'
 import { validateEnvironment } from '../src/config/environment.js'
 import { validateDeliveryParts, validateReturnParts } from '../src/domain/inspection.js'
@@ -12,7 +12,6 @@ import { initializeProtocolCounters, allocateProtocol, protocolDate } from '../s
 import { createDelivery, saveReturnInspection } from '../src/controllers/deliveryController.js'
 
 const signature = { signerName: 'R', strokes: [[{ x: 10, y: 50 }, { x: 150, y: 90 }]] }
-const secret = 'test-only-random-secret-with-more-than-32-characters'
 const originals = { find: Delivery.find, findById: Delivery.findById, create: Delivery.create, update: Delivery.findOneAndUpdate, auditFind: DeliveryDeletionAudit.find, counterUpdate: ProtocolCounter.updateOne, counterIncrement: ProtocolCounter.findOneAndUpdate }
 const originalEnv = { ...process.env }
 afterEach(() => {
@@ -20,20 +19,20 @@ afterEach(() => {
   DeliveryDeletionAudit.find = originals.auditFind; ProtocolCounter.updateOne = originals.counterUpdate; ProtocolCounter.findOneAndUpdate = originals.counterIncrement
   process.env = { ...originalEnv }
 })
-const equipment = 'Notebook Dell Latitude 5440'
+const equipment = 'Notebook'
 const parts = ['display', 'keyboard', 'touchpad', 'case', 'ports'].map((id) => ({ id, label: id, status: 'ok' as const, note: '' }))
 const returned = parts.map((part) => ({ id: part.id, label: part.label, deliveredStatus: part.status, returnedStatus: 'ok' as const, note: '' }))
-const delivery = { _id: '507f1f77bcf86cd799439011', parts, deliveredAt: '2020-01-01T00:00:00.000Z', status: 'entregue', isReturned: false }
+const delivery = { _id: '507f1f77bcf86cd799439011', recipient: 'R', parts, deliveredAt: '2020-01-01T00:00:00.000Z', status: 'entregue', isReturned: false }
 const response = () => ({ code: 200, data: null as any, status(code: number) { this.code = code; return this }, json(data: any) { this.data = data; return this } })
 
 test('todas as rotas bloqueiam ausência, invalidez e expiração de JWT; operador não acessa auditoria', async () => {
-  process.env.JWT_SECRET = secret
+  const identity = await setupMicrosoftIdentity()
   const app = express(); app.use(express.json()); app.use('/api/deliveries', deliveryRoutes)
   const server = app.listen(0, '127.0.0.1')
   await new Promise<void>((resolve) => server.once('listening', resolve))
   const address = server.address() as { port: number }
   const base = `http://127.0.0.1:${address.port}/api/deliveries`
-  const expired = jwt.sign({ id: delivery._id, email: 'operator@example.com', role: 'operator' }, secret, { expiresIn: -1 })
+  const expired = await identity.sign({ id: delivery._id, email: 'operator@example.com', role: 'operator' }, '-1s')
   try {
     for (const [method, path] of [['GET', ''], ['GET', '/next-protocol'], ['GET', '/deleted'], ['GET', `/${delivery._id}`], ['POST', ''], ['PUT', `/${delivery._id}/return`], ['DELETE', `/${delivery._id}`], ['POST', `/deleted/${delivery._id}/restore`], ['GET', `/${delivery._id}/email`], ['POST', `/${delivery._id}/email/retry`]]) {
       for (const token of [null, 'invalid', expired]) {
@@ -41,20 +40,21 @@ test('todas as rotas bloqueiam ausência, invalidez e expiração de JWT; operad
         assert.equal(result.status, 401, `${method} ${path}`)
       }
     }
-    const token = jwt.sign({ id: delivery._id, email: 'operator@example.com', role: 'operator' }, secret)
+    const token = await identity.sign({ id: delivery._id, email: 'operator@example.com', role: 'operator' })
     for (const [method, path] of [['GET', '/deleted'], ['DELETE', `/${delivery._id}`], ['POST', `/deleted/${delivery._id}/restore`], ['GET', `/${delivery._id}/email`], ['POST', `/${delivery._id}/email/retry`]]) {
       assert.equal((await fetch(base + path, { method, headers: { Authorization: `Bearer ${token}` } })).status, 403)
     }
   } finally {
+    identity.restore()
     server.closeAllConnections()
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
   }
 })
 
-test('configuração recusa segredos, senhas padrão e placeholders', () => {
-  Object.assign(process.env, { JWT_SECRET: secret, PGHOST: 'localhost', PGDATABASE: 'test', PGUSER: 'test', PGPASSWORD: 'exclusive-password-123', PGSSLROOTCERT: 'certs/global-bundle.pem', ADMIN_EMAIL: 'admin@example.com', ADMIN_PASSWORD: 'exclusive-password-123' })
+test('configuração exige IDs do Entra e conexão PostgreSQL sem placeholders', () => {
+  Object.assign(process.env, { ...identityConfig, PGHOST: 'localhost', PGDATABASE: 'test', PGUSER: 'test', PGPASSWORD: 'exclusive-password-123', PGSSLROOTCERT: 'certs/global-bundle.pem' })
   validateEnvironment()
-  for (const [key, value] of [['JWT_SECRET', 'secret'], ['JWT_SECRET', 'SUBSTITUA_POR_UM_SEGREDO_ALEATORIO'], ['ADMIN_PASSWORD', 'admin12345'], ['ADMIN_PASSWORD', 'SUBSTITUA_POR_UMA_SENHA_FORTE'], ['ADMIN_EMAIL', 'invalid'], ['PGPASSWORD', 'SUA_SENHA_AQUI'], ['PGHOST', ''], ['PGDATABASE', ''], ['PGSSLROOTCERT', '']]) {
+  for (const [key, value] of [['ENTRA_TENANT_ID', 'common'], ['ENTRA_API_CLIENT_ID', ''], ['ENTRA_CLIENT_ID', 'invalid'], ['PGPASSWORD', 'SUA_SENHA_AQUI'], ['PGHOST', ''], ['PGDATABASE', ''], ['PGSSLROOTCERT', '']]) {
     const previous = process.env[key]; process.env[key] = value
     assert.throws(validateEnvironment, undefined, key)
     process.env[key] = previous
@@ -93,9 +93,9 @@ test('migração mantém máximos de protocolos ativos e arquivados', async () =
 
 test('reserva de protocolo usa operação atômica e propaga falhas do PostgreSQL', async () => {
   let calls = 0
-  ProtocolCounter.findOneAndUpdate = (async (_filter: any, _update: any, options: any) => {
+  ProtocolCounter.findOneAndUpdate = (async (filter: { _id: string }) => {
     calls++
-    assert.equal(options.upsert, true)
+    assert.equal(filter._id, protocolDate().slice(0, 4))
     return { sequence: 2 }
   }) as any
   assert.equal(await allocateProtocol(), `ENT-${protocolDate()}-0002`)
@@ -126,7 +126,7 @@ test('devolução repetida ou perdedora de corrida retorna conflito', async () =
   Delivery.findById = (async () => delivery) as any
   Delivery.findOneAndUpdate = (async (filter: any) => { assert.equal(filter.isReturned.$ne, true); assert.equal(filter.returnInspection, null); return null }) as any
   const raced = response()
-  await saveReturnInspection({ params: { id: delivery._id }, body: { parts: returned, signature }, user: { email: 'operator@example.com' } } as any, raced as any)
+  await saveReturnInspection({ params: { id: delivery._id }, body: { parts: returned, signature: { ...signature, signerName: delivery.recipient } }, user: { email: 'operator@example.com' } } as any, raced as any)
   assert.equal(raced.code, 409)
 })
 

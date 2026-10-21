@@ -1,16 +1,17 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
-import jwt from 'jsonwebtoken'
+import { setupMicrosoftIdentity } from './microsoftTestIdentity.js'
 import { Reservation } from '../src/models/Reservation.js'
 import reservationRoutes from '../src/routes/reservationRoutes.js'
 import { validateReservation } from '../src/domain/reservation.js'
+import { minimumReservationEndDate } from '../src/domain/reservationDates.js'
 
-const payload = { equipment: 'Notebook Dell Latitude 5440', requesterName: 'Pessoa Teste', department: 'TI', purpose: 'Treinamento', startDate: '2099-10-06', endDate: '2099-10-08' }
+const payload = { equipment: 'Notebook', requesterName: 'Pessoa Teste', department: 'TI', purpose: 'Treinamento', startDate: '2099-10-06', endDate: '2099-10-08' }
 
 test('reservas validam catálogo, período, tamanho dos campos e descartam metadados do cliente', () => {
-  assert.deepEqual(validateReservation({ ...payload, requesterEmail: 'outro@example.com', status: 'aprovada' }, '2099-10-06'), payload)
-  for (const change of [{ equipment: 'impressora' }, { equipment: 'toString' }, { startDate: '2099-10-05' }, { endDate: '2099-10-05' }, { startDate: '2099-02-30' }, { endDate: '2099-13-01' }, { requesterName: ' ' }, { purpose: 'x'.repeat(2001) }]) {
+  assert.deepEqual(validateReservation({ ...payload, requesterEmail: 'outro@example.com', status: 'aprovada', glpiTicketId: 99, glpiStatus: 'created', glpiTicketUrl: 'javascript:alert(1)' }, '2099-10-06'), payload)
+  for (const change of [{ equipment: 'impressora' }, { equipment: 'toString' }, { startDate: '2099-10-05' }, { endDate: '2099-10-05' }, { endDate: '2099-10-06' }, { startDate: '2099-02-30' }, { endDate: '2099-13-01' }, { requesterName: ' ' }, { purpose: 'x'.repeat(2001) }]) {
     assert.throws(() => validateReservation({ ...payload, ...change }, '2099-10-06'))
   }
   assert.throws(() => validateReservation(null))
@@ -23,11 +24,20 @@ test('reservas validam catálogo, período, tamanho dos campos e descartam metad
   assert.equal(json._id, undefined)
 })
 
+test('reserva aceita o dia seguinte, inclusive em viradas de mês/ano e ano bissexto', () => {
+  for (const [startDate, endDate] of [['2099-10-06', '2099-10-07'], ['2026-10-31', '2026-11-01'], ['2026-12-31', '2027-01-01'], ['2028-02-28', '2028-02-29'], ['2028-02-29', '2028-03-01']]) {
+    assert.equal(minimumReservationEndDate(startDate), endDate)
+    assert.equal(validateReservation({ ...payload, startDate, endDate }, startDate).endDate, endDate)
+    assert.throws(() => validateReservation({ ...payload, startDate, endDate: startDate }, startDate), /1 dia/)
+  }
+  assert.equal(minimumReservationEndDate(''), '')
+  assert.equal(minimumReservationEndDate('2026-02-30'), '')
+})
+
 test('API de reservas protege identidade, visibilidade e transições concorrentes de situação', async () => {
   const originalEnv = { ...process.env }
   const originals = { find: Reservation.find, create: Reservation.create, update: Reservation.findOneAndUpdate }
-  const secret = 'reservations-test-secret-with-more-than-32-characters'
-  Object.assign(process.env, { AUTH_PROVIDER: 'local', JWT_SECRET: secret })
+  const identity = await setupMicrosoftIdentity()
   const records: Record<string, any>[] = []
   let failSave = false
   Reservation.create = (async (data: Record<string, unknown>) => {
@@ -49,19 +59,25 @@ test('API de reservas protege identidade, visibilidade e transições concorrent
   try {
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/reservations`
-    const request = (path = '', method = 'GET', body?: unknown, role = 'operator', email = ' Pessoa@Example.com ') => fetch(base + path, {
-      method, headers: { Authorization: `Bearer ${jwt.sign({ id: 'test', role, email }, secret, { expiresIn: '5m' })}`, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
+    const request = async (path = '', method = 'GET', body?: unknown, role = 'operator', email = ' Pessoa@Example.com ', name = 'Pessoa autenticada') => fetch(base + path, {
+      method, headers: { Authorization: `Bearer ${await identity.sign({ id: 'test', role, email, name })}`, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
     })
     assert.equal((await fetch(base)).status, 401)
+    assert.equal((await fetch(base + '/000000000000000000000001/glpi/retry', { method: 'POST' })).status, 401)
+    assert.equal((await request('/000000000000000000000001/glpi/retry', 'POST')).status, 403)
     assert.equal((await request('', 'POST', payload, 'admin')).status, 403)
     assert.equal(records.length, 0)
-    const created = await request('', 'POST', { ...payload, status: 'aprovada', requesterEmail: 'spoof@example.com', reviewedBy: 'spoof@example.com' })
+    const created = await request('', 'POST', { ...payload, requesterName: 'Nome adulterado', status: 'aprovada', requesterEmail: 'spoof@example.com', reviewedBy: 'spoof@example.com' })
     assert.equal(created.status, 201)
     const own = await created.json()
+    assert.equal((await request('', 'POST', { ...payload, endDate: payload.startDate })).status, 400)
+    assert.equal(records.length, 1)
     assert.equal(own.requesterEmail, 'pessoa@example.com')
+    assert.equal(own.requesterName, 'Pessoa autenticada')
     assert.equal(own.status, 'pendente')
     assert.equal(own.reviewedBy, undefined)
-    await request('', 'POST', payload, 'operator', 'other@example.com')
+    await request('', 'POST', payload, 'operator', 'other@example.com', '')
+    assert.equal(records[1].requesterName, 'other@example.com')
     assert.equal((await (await request('?requesterEmail=other@example.com')).json()).length, 1)
     assert.equal((await (await request('', 'GET', undefined, 'admin')).json()).length, 2)
     assert.equal((await request('/' + own.id, 'PATCH', { status: 'aprovada' })).status, 403)
@@ -88,6 +104,7 @@ test('API de reservas protege identidade, visibilidade e transições concorrent
     assert.equal((await request('', 'POST', payload)).status, 500)
     assert.equal(records.length, 2)
   } finally {
+    identity.restore()
     server.closeAllConnections()
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
     Reservation.find = originals.find; Reservation.create = originals.create; Reservation.findOneAndUpdate = originals.update

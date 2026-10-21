@@ -10,11 +10,9 @@ export type EquipmentPart = {
 
 export type EquipmentId = 'notebook' | 'desktop' | 'phone' | 'monitor'
 
-export type EquipmentDefinition = {
+type EquipmentDefinition = {
   id: EquipmentId
   name: string
-  apiName: string
-  modelLabel: string
   parts: Omit<EquipmentPart, 'status' | 'note'>[]
 }
 
@@ -22,8 +20,6 @@ export const equipmentCatalog: EquipmentDefinition[] = [
   {
     id: 'notebook',
     name: 'Notebook',
-    apiName: 'Notebook Dell Latitude 5440',
-    modelLabel: 'DELL LATITUDE 5440',
     parts: [
       { id: 'display', label: 'Tela e moldura', detail: 'Painel, vidro e dobradiças' },
       { id: 'keyboard', label: 'Teclado', detail: 'Teclas e iluminação' },
@@ -35,8 +31,6 @@ export const equipmentCatalog: EquipmentDefinition[] = [
   {
     id: 'desktop',
     name: 'Desktop',
-    apiName: 'Computador Dell OptiPlex 3000',
-    modelLabel: 'DELL OPTIPLEX 3000',
     parts: [
       { id: 'case', label: 'Gabinete', detail: 'Tampa, estrutura e ventilação' },
       { id: 'front-panel', label: 'Painel frontal', detail: 'Botão liga/desliga e indicadores' },
@@ -47,8 +41,6 @@ export const equipmentCatalog: EquipmentDefinition[] = [
   {
     id: 'phone',
     name: 'Celular',
-    apiName: 'Celular Samsung Galaxy A36',
-    modelLabel: 'GALAXY A36',
     parts: [
       { id: 'display', label: 'Tela', detail: 'Vidro, painel e toque' },
       { id: 'case', label: 'Carcaça', detail: 'Tampa traseira e laterais' },
@@ -60,8 +52,6 @@ export const equipmentCatalog: EquipmentDefinition[] = [
   {
     id: 'monitor',
     name: 'Monitor',
-    apiName: 'Monitor Dell P2222H',
-    modelLabel: 'DELL P2222H',
     parts: [
       { id: 'display', label: 'Tela', detail: 'Painel, pixels e superfície' },
       { id: 'bezel', label: 'Moldura e gabinete', detail: 'Bordas e estrutura traseira' },
@@ -71,6 +61,13 @@ export const equipmentCatalog: EquipmentDefinition[] = [
     ],
   },
 ]
+
+/** Display historic category labels without their old fixed brand/model suffix. */
+export function getEquipmentName(value: string): string {
+  const category = /^(notebook|desktop|computador|celular|monitor)(?:\s|$)/i.exec(value.trim())?.[1].toLowerCase()
+  if (category === 'computador' || category === 'desktop') return 'Desktop'
+  return equipmentCatalog.find(item => item.name.toLowerCase() === category)?.name ?? value
+}
 
 export function getInitialParts(equipmentId: EquipmentId): EquipmentPart[] {
   const equipment = equipmentCatalog.find((item) => item.id === equipmentId) ?? equipmentCatalog[0]

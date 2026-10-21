@@ -11,7 +11,7 @@ async function main(): Promise<void> {
   if (!connection?.ssl) throw new Error('A conexão precisa usar TLS.')
   if (connection.database !== process.env.PGDATABASE) throw new Error('Banco conectado diferente do configurado.')
   const counts: Record<string, number> = {}
-  for (const table of ['users', 'deliveries', 'reservations', 'delivery_deletion_audits', 'protocol_counters', 'delivery_email_jobs', 'delivery_email_attempts']) {
+  for (const table of ['users', 'deliveries', 'reservations', 'delivery_deletion_audits', 'protocol_counters', 'delivery_email_jobs', 'delivery_email_attempts', 'reservation_glpi_jobs']) {
     const result = await pool.query(`SELECT count(*) AS count FROM checklist_donato."${table}"`)
     counts[table] = Number(result.rows[0].count)
   }

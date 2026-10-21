@@ -4,8 +4,7 @@ Aplicação web para registrar entregas e devoluções de equipamentos, acompanh
 
 ## Funcionalidades
 
-- Login e criação de contas com autenticação no backend e tokens JWT.
-- Criação automática da conta administradora configurada ao iniciar o backend.
+- Login corporativo exclusivo com Microsoft Entra ID e permissões validadas no backend.
 - Cadastro de equipamento, patrimônio, número de série, modelo, marca, responsável, e-mail e setor.
 - Inspeção interativa de notebooks, desktops, celulares e monitores, com observações para itens danificados.
 - Histórico de entregas pesquisável, filtros por situação/danos, consulta de detalhes e impressão.
@@ -13,12 +12,11 @@ Aplicação web para registrar entregas e devoluções de equipamentos, acompanh
 - Exclusão permitida apenas ao administrador, com confirmação e auditoria no PostgreSQL.
 - Tela administrativa para consultar entregas excluídas e o snapshot arquivado.
 - Recuperação de entregas excluídas pelo administrador, preservando os dados originais e registrando a recuperação na auditoria.
-- Troca da senha do usuário autenticado sem solicitar a senha anterior; nova senha com pelo menos 8 caracteres.
 - Layout responsivo para desktop e celular.
 
 ## Requisitos
 
-- Node.js 20.19+ ou 22.12+ e npm (requisitos do Vite 8).
+- Node.js 22.12+ e npm (os testes usam mocks de módulos do Node).
 - PostgreSQL/RDS acessível na porta 5432, com certificado CA válido. A auditoria e a exclusão são confirmadas na mesma transação SQL.
 
 ## Instalação
@@ -41,22 +39,17 @@ Em macOS/Linux, use `cp server/.env.example server/.env`. Edite o arquivo e conf
 | Variável | Descrição |
 | --- | --- |
 | `PORT` | Porta da API; padrão `5000`. |
+| `ENTRA_TENANT_ID` | ID do diretório corporativo. |
+| `ENTRA_API_CLIENT_ID` | ID do aplicativo API no Entra ID. |
+| `ENTRA_CLIENT_ID` | ID do aplicativo Web autorizado. |
 | `PGHOST`, `PGPORT` | Endpoint do RDS e porta; padrão `5432`. |
 | `PGDATABASE` | Banco PostgreSQL, configurado como `inventorycontrol`. |
 | `PGUSER`, `PGPASSWORD` | Credenciais PostgreSQL, somente no backend. |
 | `PGSSLROOTCERT` | Caminho do certificado CA relativo a `server`, por exemplo `certs/global-bundle.pem`. |
-| `JWT_SECRET` | Segredo aleatório obrigatório, com pelo menos 32 caracteres. |
-| `ADMIN_EMAIL` | E-mail da conta administradora inicial. |
-| `ADMIN_PASSWORD` | Senha inicial exclusiva, com pelo menos 12 caracteres. |
-| `ADMIN_NAME` | Nome da conta administradora. |
 
 Configure o acesso de rede ao RDS para o servidor da API. A conexão exige TLS e verifica a CA e o nome do servidor. O certificado público da AWS está em `server/certs/global-bundle.pem`. Não use placeholders, credenciais de exemplo ou segredos padrão em produção. `server/.env` é local e não deve ser enviado ao repositório.
 
-No modo local, o servidor cria o administrador configurado na primeira inicialização. Se já existir uma conta com `ADMIN_EMAIL`, o seed garante a role `admin`, mas não substitui a senha existente. Não há segredo JWT nem senha administrativa padrão. O servidor recusa configurações ausentes, curtas ou com placeholders e só inicia após conectar ao banco, verificar as tabelas e inicializar os contadores de protocolo. `ADMIN_NAME` permanece opcional. No modo Microsoft, as credenciais locais não são exigidas.
-
-## Recuperar o acesso administrativo
-
-Se a conta administradora já existe, alterar `ADMIN_PASSWORD` no `.env` não altera sua senha no banco. Na pasta `server`, execute `npm run admin:check` para verificar se a senha configurada corresponde à salva. Para aplicar explicitamente a senha atual do `.env` à conta indicada por `ADMIN_EMAIL`, execute `npm run admin:reset`. Esses comandos exigem acesso ao PostgreSQL e não exibem credenciais. O reset altera somente a senha dessa conta, preservando usuários, entregas e auditorias.
+Configure também os IDs `VITE_ENTRA_*` no `.env` da raiz, conforme a seção de login corporativo. Contas, senhas e funções de acesso são administradas no Microsoft Entra ID. O servidor valida os IDs do Entra e a configuração do banco antes de iniciar.
 
 ## Executar em desenvolvimento
 
@@ -74,16 +67,14 @@ npm run dev
 
 Abra a URL exibida pelo Vite, normalmente `http://localhost:5173`. O proxy do Vite encaminha chamadas `/api` para `http://localhost:5000`. Se alterar `PORT`, atualize o destino do proxy em `vite.config.ts`.
 
-A rota de saúde fica em `http://localhost:5000/api/health`. O terminal do backend mostra o resultado da conexão PostgreSQL e, no modo local, do seed do administrador.
+A rota de saúde fica em `http://localhost:5000/api/health`. O terminal do backend mostra o resultado da conexão PostgreSQL.
 
 ## Uso e permissões
 
-- As contas criadas pela tela de cadastro recebem role `operator`.
-- A role `admin` é atribuída pelo seed do servidor, não pelo prefixo do e-mail informado no navegador.
-- Todas as rotas de entregas exigem JWT válido no backend. A exclusão e a consulta da auditoria exigem também a role `admin`. Sessões expiradas retornam à tela de login.
+- As funções `operator` e `admin` são atribuídas no aplicativo API do Microsoft Entra ID.
+- Todas as rotas de entregas exigem token de acesso Microsoft válido no backend. A exclusão e a consulta da auditoria exigem também a role `admin`. Sessões expiradas retornam à tela de login.
 - Operadores não podem excluir entregas nem consultar a auditoria de excluídos.
 - Administradores podem excluir entregas e acessar **Excluídas**. O servidor valida a role nas duas operações, independentemente do que a interface exibe.
-- A troca de senha exige sessão autenticada; a senha anterior não é solicitada.
 
 ## API
 
@@ -92,10 +83,7 @@ Todas as rotas têm o prefixo `/api`. Os endpoints marcados como autenticados ou
 | Método | Caminho | Acesso | Descrição |
 | --- | --- | --- | --- |
 | `GET` | `/health` | Público | Verifica a disponibilidade da API. |
-| `POST` | `/auth/register` | Público | Cria uma conta de operador. |
-| `POST` | `/auth/login` | Público | Autentica e retorna JWT. |
 | `GET` | `/auth/me` | Autenticado | Consulta o perfil. |
-| `PATCH` | `/auth/password` | Autenticado | Altera a senha do próprio usuário. |
 | `GET` | `/deliveries` | Autenticado | Lista entregas; aceita `?status=entregue`, `em_posse` ou `devolvido`. |
 | `GET` | `/deliveries/next-protocol` | Autenticado | Mostra uma previsão do próximo protocolo, sem reservá-lo. |
 | `GET` | `/deliveries/:id` | Autenticado | Consulta uma entrega. |
@@ -119,7 +107,7 @@ Todas as rotas têm o prefixo `/api`. Os endpoints marcados como autenticados ou
 │   ├── styles/                    # Estilos globais e por tela
 │   └── main.tsx                   # Entrada React
 ├── server/src/
-│   ├── config/                    # Conexão PostgreSQL e seed do admin
+│   ├── config/                    # Conexão PostgreSQL e configuração do Entra ID
 │   ├── controllers/               # Lógica dos endpoints
 │   ├── middleware/                # Autenticação e autorização
 │   ├── models/                    # Modelos PostgreSQL
@@ -130,13 +118,13 @@ Todas as rotas têm o prefixo `/api`. Os endpoints marcados como autenticados ou
 └── README.md
 ```
 
-O PostgreSQL armazena usuários, entregas, reservas, contadores anuais e auditorias em tabelas no schema `checklist_donato`. IDs de documentos antigos continuam como texto, preservando referências e sessões. Cada nova auditoria inclui o snapshot integral da entrega, o ID/e-mail do administrador e o timestamp. Registros de auditoria criados por versões anteriores podem conter somente os campos disponíveis à época.
+O PostgreSQL armazena usuários, entregas, reservas, contadores anuais e auditorias em tabelas no schema `checklist_donato`. IDs de documentos antigos continuam como texto, preservando referências históricas. Cada nova auditoria inclui o snapshot integral da entrega, o ID/e-mail do administrador e o timestamp. Registros de auditoria criados por versões anteriores podem conter somente os campos disponíveis à época.
 
 ## Login corporativo com Microsoft Entra ID
 
-A integração está implementada e é ativada por `AUTH_PROVIDER=microsoft` na API e `VITE_AUTH_PROVIDER=microsoft` no frontend. O modo padrão continua sendo `local` até você preencher os IDs dos aplicativos. No modo Microsoft, o site usa MSAL com autorização por código e PKCE; a API verifica os tokens com as chaves públicas da Microsoft. Nenhum segredo de aplicativo é necessário para este fluxo.
+O acesso é feito exclusivamente pelo Microsoft Entra ID. O site usa MSAL com autorização por código e PKCE; a API verifica os tokens com as chaves públicas da Microsoft. Nenhum segredo de aplicativo é necessário para este fluxo.
 
-O modo Microsoft não cria usuários no banco, não inicializa o administrador local e bloqueia cadastro, login por senha e alteração de senha. As entregas usam o PostgreSQL/RDS configurado. As auditorias guardam a identidade estável `tenantId:objectId` e o identificador de exibição do autor. Usuários locais migrados não são removidos automaticamente.
+O sistema não cria usuários no banco. Cadastro, login por senha, alteração de senha e administração de contas locais foram removidos do código. As entregas usam o PostgreSQL/RDS configurado. As auditorias guardam a identidade estável `tenantId:objectId` e o identificador de exibição do autor. Usuários locais migrados não são removidos automaticamente.
 
 ### 1. Confirmar a identidade corporativa
 
@@ -183,7 +171,6 @@ Se ativar **Atribuição necessária? = Sim** também no aplicativo empresarial 
 Crie ou edite `.env` na raiz com os valores do portal:
 
 ```dotenv
-VITE_AUTH_PROVIDER=microsoft
 VITE_ENTRA_TENANT_ID=ID_DO_DIRETORIO
 VITE_ENTRA_CLIENT_ID=ID_DO_APLICATIVO_WEB
 VITE_ENTRA_API_CLIENT_ID=ID_DO_APLICATIVO_API
@@ -192,13 +179,12 @@ VITE_ENTRA_API_CLIENT_ID=ID_DO_APLICATIVO_API
 Em `server/.env`, mantenha a configuração real do banco e da porta e acrescente:
 
 ```dotenv
-AUTH_PROVIDER=microsoft
 ENTRA_TENANT_ID=ID_DO_DIRETORIO
 ENTRA_CLIENT_ID=ID_DO_APLICATIVO_WEB
 ENTRA_API_CLIENT_ID=ID_DO_APLICATIVO_API
 ```
 
-Os valores dos três IDs devem ser GUIDs reais. `JWT_SECRET`, `ADMIN_EMAIL` e `ADMIN_PASSWORD` são usados somente no modo local; não são exigidos no modo Microsoft. As variáveis `VITE_*` são públicas e entram no build. Reinicie o Vite ao editar o ambiente; em produção, gere e publique um novo build do frontend. Reinicie também a API.
+Os valores dos três IDs devem ser GUIDs reais. As variáveis `VITE_*` são públicas e entram no build. Reinicie o Vite ao editar o ambiente; em produção, gere e publique um novo build do frontend. Reinicie também a API.
 
 Na raiz do projeto, em dois terminais:
 
@@ -224,7 +210,7 @@ Confira com contas de teste:
 - Administrador entra, exclui uma entrega e a auditoria contém sua identidade corporativa.
 - Usuário sem função e conta de outra organização não acessam a API.
 - Atualizar a página mantém a sessão; sair retorna ao login.
-- Cadastro local, login por senha e alteração de senha são recusados no modo Microsoft.
+- As antigas rotas `/auth/register`, `/auth/login` e `/auth/password` retornam 404.
 
 Erros comuns: `AADSTS50011` indica divergência da URI de retorno; consentimento pendente exige aprovação do administrador; erro 403 de função exige atribuição no aplicativo empresarial **API**; erro 401 pode indicar tokens v1, IDs incorretos ou token expirado. Após alterar funções, saia e entre novamente para obter um token novo. Mudanças de acesso podem levar tempo para aparecer nos tokens já emitidos.
 
@@ -267,7 +253,7 @@ Backend:
 
 Ao registrar uma nova entrega, a aplicação apresenta os dados e condições da inspeção e abre uma tela para o responsável desenhar sua assinatura com o mouse (ou toque). A confirmação exige assinatura não vazia e aceite dos dados. Voltar à conferência não grava a entrega. Se o servidor recusar a operação, o desenho permanece disponível para tentar novamente.
 
-A devolução exige uma nova assinatura do responsável pelo recebimento no hospital, identificado na tela. A inspeção e a assinatura são salvas juntas; a devolução só é concluída após a resposta da API. A assinatura da entrega não é reutilizada para confirmar a devolução.
+A devolução exige uma nova assinatura da pessoa que estava em posse do equipamento. O nome vem do responsável da entrega e não pode ser editado; a API recusa um signatário diferente. O operador que coleta e confere continua registrado separadamente. A inspeção e a assinatura são salvas juntas; a devolução só é concluída após a resposta da API. A assinatura da entrega não é reutilizada para confirmar a devolução.
 
 Os traços são armazenados como coordenadas, com nome do signatário, data do servidor, operador autenticado e hash dos dados da movimentação. A API exige assinaturas válidas nas novas entregas e devoluções, mesmo se a chamada não passar pela interface. Registros antigos permanecem consultáveis sem assinatura. O PDF mostra a assinatura da entrega no termo de responsabilidade e a assinatura de devolução nas duas vias, com ajuste para uma página A4.
 
@@ -283,7 +269,7 @@ As reservas são persistidas na tabela `checklist_donato.reservations` do Postgr
 
 ## Gravação e protocolos
 
-Login, cadastro e gravações exigem conexão com a API. A interface aguarda confirmação do servidor e exibe erros sem simular sucesso local. Alterações rejeitadas não modificam o histórico. Dados antigos em `localStorage` não são apagados, mas não são carregados nem sincronizados automaticamente; exporte e confira esses registros antes de migrá-los para o banco.
+Acesso e gravações exigem conexão com a API. A interface aguarda confirmação do servidor e exibe erros sem simular sucesso local. Alterações rejeitadas não modificam o histórico. Dados antigos em `localStorage` não são apagados, mas não são carregados nem sincronizados automaticamente; exporte e confira esses registros antes de migrá-los para o banco.
 
 Novos protocolos usam `ENT-AAAA-MM-DD-NNNN`, por exemplo `ENT-2026-10-13-0006`. A data corresponde ao mesmo instante da entrega, no fuso `America/Sao_Paulo`. A sequência continua anual e é reservada por `INSERT ... ON CONFLICT DO UPDATE` atômico no PostgreSQL. Protocolos antigos são preservados. Na inicialização, o contador considera ambos os formatos nas entregas e nos snapshots de exclusão, sem diminuir uma sequência já reservada. Exclusões e recuperações não reutilizam números. Falhas após a reserva podem deixar lacunas na sequência. Protocolos enviados pelo cliente são ignorados.
 
@@ -293,7 +279,7 @@ Em **Excluídas**, o administrador pode usar **Recuperar entrega** e confirmar a
 
 Registros antigos sem snapshot completo não podem ser recuperados automaticamente, e a interface informa essa limitação. Após uma nova exclusão da mesma entrega, a recuperação utiliza o snapshot dessa última exclusão. A rota `POST /api/deliveries/deleted/:auditId/restore` exige autenticação e perfil de administrador.
 
-O script `server/sql/004_restore_deliveries.sql` adiciona os campos de recuperação e já foi aplicado ao RDS configurado. Em outra instalação, execute esse script antes de publicar esta versão da API. Para uma instalação nova, aplique `001_checklist_schema.sql`, `003_rds_backend.sql`, `004_restore_deliveries.sql`, `005_equipment_possession.sql`, `006_delivery_email.sql` e `007_return_email.sql`, nessa ordem.
+O script `server/sql/004_restore_deliveries.sql` adiciona os campos de recuperação e já foi aplicado ao RDS configurado. Em outra instalação, execute esse script antes de publicar esta versão da API. Para uma instalação nova, aplique `001_checklist_schema.sql`, `003_rds_backend.sql`, `004_restore_deliveries.sql`, `005_equipment_possession.sql`, `006_delivery_email.sql`, `007_return_email.sql` e `008_reservation_glpi.sql`, nessa ordem.
 
 ## Bloqueio de equipamentos em posse
 
@@ -307,7 +293,7 @@ O backend valida equipamento, peças únicas, inspeção completa e condições 
 
 ## Envio automático do termo assinado
 
-O backend gera um PDF A4 com os dados, protocolo e traços da assinatura, usando o mesmo HTML, CSS, logotipo, campos e assinatura do botão de impressão. O modelo compartilhado fica em `server/src/domain/loanTermHtml.ts` e `loanTermStyles.ts`; o Chromium aplica o mesmo ajuste de escala para uma página. Na entrega assinada, o anexo inclui somente os dados do requisitante/produto e o termo de responsabilidade, sem as vias de devolução. Na devolução assinada, o anexo inclui somente a **Via do Requisitante** do termo de devolução, com observações, data e assinatura do recebedor. Os dois envios usam o `recipientEmail` da entrega; a impressão continua com o documento completo. O remetente configurado é `ti@donatoholhos.com.br` e o envio usa Microsoft Graph com autenticação de aplicativo. A senha da caixa não é utilizada.
+O backend gera um PDF A4 com os dados, protocolo e traços da assinatura, usando o mesmo HTML, CSS, logotipo, campos e assinatura do botão de impressão. O modelo compartilhado fica em `server/src/domain/loanTermHtml.ts` e `loanTermStyles.ts`; o Chromium aplica o mesmo ajuste de escala para uma página. Na entrega assinada, o anexo inclui somente os dados do requisitante/produto e o termo de responsabilidade, sem as vias de devolução. Na devolução assinada, o anexo inclui somente a **Via do Requisitante** do termo de devolução, com observações, data e assinatura da pessoa que devolve o equipamento. Os dois envios usam o `recipientEmail` da entrega; a impressão continua com o documento completo. O remetente configurado é `ti@donatoholhos.com.br` e o envio usa Microsoft Graph com autenticação de aplicativo. A senha da caixa não é utilizada.
 
 Para gerar o PDF no servidor, instale o Chromium do Playwright depois das dependências:
 
@@ -339,6 +325,31 @@ Em outra implantação, aplique o SQL, configure as variáveis, instale as depen
 
 O script `007_return_email.sql` já foi aplicado ao RDS. A fila possui um registro único por entrega e tipo (`delivery` ou `return`); a devolução agenda o envio na mesma transação que salva sua assinatura. Devoluções anteriores não são reenviadas. Na tela de detalhes, os status e as novas tentativas são separados para cada termo.
 
+## Chamados automáticos no GLPI
+
+Cada nova reserva gera uma pendência no RDS na mesma transação em que é salva. O backend abre um chamado do tipo Requisição no GLPI 10, categoria Hardware (ID 25), entidade raiz (ID 0). O chamado inclui solicitante, e-mail, setor, equipamento, período e finalidade. O solicitante é registrado pelo e-mail; o nome consta na descrição. Nenhum grupo é imposto: valem as regras de atribuição do GLPI, ou `GLPI_GROUP_ID` se configurado. A tela de reservas mostra o número e o link do chamado; administradores podem reagendar falhas.
+
+Configure exclusivamente em `server/.env`:
+
+```dotenv
+GLPI_ENABLED=true
+GLPI_BASE_URL=http://suporte.donatoholhos.com.br
+GLPI_APP_TOKEN=TOKEN_DO_CLIENTE_DA_API
+GLPI_USER_TOKEN=TOKEN_DE_API_DO_USUARIO
+GLPI_CATEGORY_NAME=Hardware
+GLPI_CATEGORY_ID=25
+GLPI_ENTITY_ID=0
+GLPI_GROUP_ID=
+```
+
+A API REST e a autenticação por token externo devem estar habilitadas no GLPI. Crie o cliente em Configurar → Geral → API; o token pessoal fica em Minhas preferências → Chaves de acesso remoto. O usuário precisa criar e consultar chamados, e acessar a categoria/entidade. Credenciais não são enviadas ao navegador nem incluídas nos logs. A URL da API foi verificada no domínio como `/apirest.php`; não é necessário usar o IP do servidor mostrado na configuração antiga do GLPI.
+
+`npm --prefix server run glpi:check` valida a autenticação e consulta a categoria, entidade e chamados, sem criar chamados. `GLPI_ENABLED=false` pausa o processamento e mantém as novas pendências. Reinicie a API ao alterar o ambiente. A fila é processada a cada 10 segundos; falhas seguras anteriores à criação e limites temporários são repetidos até cinco vezes, respeitando Retry-After. Depois, o administrador pode usar **Tentar abrir chamado novamente**.
+
+O título dos novos chamados é `Nova Reserva de Equipamento realizada por NOME_DO_SOLICITANTE`, usando o nome da pessoa que solicitou o equipamento. A descrição contém a referência única `[Reserva ID_DA_RESERVA]`. Antes de criar, o backend busca essa referência no título e na descrição para reconhecer tanto os chamados antigos quanto os novos e vincular um chamado existente. Timeout ou erro 5xx durante a criação e processos interrompidos exigem revisão, sem repetir automaticamente o POST. O usuário da API deve enxergar os chamados da entidade para essa verificação funcionar.
+
+O SQL `server/sql/008_reservation_glpi.sql` já foi aplicado ao RDS. Ele adiciona os campos de acompanhamento e a fila `reservation_glpi_jobs`. Não há envio retroativo das reservas existentes. Aprovar, recusar, cancelar ou entregar uma reserva não altera o chamado nesta integração; a automação trata da abertura ao criar a reserva. Em outra instalação, aplique o SQL antes de publicar esta versão, configure as credenciais e reinicie a API. A integração utiliza a [API REST V1 do GLPI](https://help.glpi-project.org/documentation/modules/configuration/general/api/api).
+
 ## Testes
 
 Execute `npm --prefix server test` para as regressões de autenticação, configuração, inspeções, protocolos, gravações e tratamento de falhas da API. Por padrão, os testes de integração ficam desativados. Para habilitá-los, configure `TEST_POSTGRES=1` e as variáveis `PG*` de uma instância de testes. A suíte cria bancos exclusivos com prefixo `checklist_test_` e remove somente esses bancos ao final; o usuário precisa de permissão para criar bancos. `TEST_RDS_ENV` pode indicar um arquivo de configuração relativo a `server`, como `.env`; não é necessário duplicar a configuração em outro arquivo.
@@ -355,7 +366,7 @@ npm --prefix server run db:check
 
 O backend lê as variáveis `PG*` de `server/.env` e conecta exclusivamente ao PostgreSQL com validação do certificado. O frontend acessa `/api` e não recebe credenciais de banco nem mantém uma base alternativa de entregas. Na execução de desenvolvimento, o proxy do Vite encaminha essas chamadas para a API na porta 5000.
 
-O backup, o relatório e uma cópia do importador foram arquivados fora do projeto em `../Backups Checklist/migracao-rds-2026-10-13/`. O backup da transferência está na subpasta `rds-2026-10-13T14-42-49.179Z/`. Esses arquivos não são utilizados pelo aplicativo. Os documentos originais também são preservados no RDS em `migration_source_documents`, com SHA-256. As tabelas operacionais mantêm IDs, hashes de senha, datas, inspeções, assinaturas e vínculos. Auditorias antigas incompletas exibem os dados históricos disponíveis.
+O backup, o relatório e uma cópia do importador foram arquivados fora do projeto em `../Backups Checklist/migracao-rds-2026-10-13/`. O backup da transferência está na subpasta `rds-2026-10-13T14-42-49.179Z/`. Esses arquivos não são utilizados pelo aplicativo. Os documentos originais também são preservados no RDS em `migration_source_documents`, com SHA-256. As tabelas operacionais mantêm IDs, datas, inspeções, assinaturas e vínculos. A tabela de usuários e os hashes antigos são preservados como histórico, sem uso na autenticação atual. Auditorias antigas incompletas exibem os dados históricos disponíveis.
 
 Na implantação, instale as dependências do backend, gere o build e configure `PG*` e o certificado CA no servidor que hospeda a API. A troca feita nesta migração está no ambiente local do projeto; outras instâncias da API devem receber o mesmo código/configuração e ser reiniciadas. O certificado segue a [documentação TLS do RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/PostgreSQL.Concepts.General.SSL.html).
 
@@ -363,7 +374,7 @@ Para recuperação histórica, `server.env.before.local` no arquivo externo pres
 
 ## Segurança
 
-- Não versione nem compartilhe `server/.env`, `PGPASSWORD`, backups ou `JWT_SECRET`.
-- Use HTTPS, senha inicial exclusiva e segredo JWT aleatório em ambientes publicados.
+- Não versione nem compartilhe `server/.env`, `PGPASSWORD`, tokens de integração ou backups.
+- Use HTTPS em ambientes publicados e gerencie o acesso corporativo no Microsoft Entra ID.
 - A operação de exclusão e a criação do registro de auditoria são atômicas; se uma falhar, nenhuma é confirmada.
 - Proteções de interface não substituem validação no servidor. As operações administrativas validam a role `admin` na API.
