@@ -1,5 +1,7 @@
-.login-screen { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; justify-items: center; background: var(--theme-surface, #fff); color: var(--theme-text, #24343e); }
-.login-panel { width: min(410px, calc(100% - 56px)); align-self: center; justify-self: center; padding: 48px 0; }
+.login-screen { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 37fr) minmax(0, 63fr); align-items: center; justify-items: center; background: var(--theme-surface, #fff); color: var(--theme-text, #24343e); }
+.login-screen::before { content: ''; grid-column: 1; grid-row: 1; align-self: stretch; justify-self: stretch; background: #182430; border-right: 1px solid var(--theme-border, #dce5ea); }
+@media screen { :root[data-theme="dark"] .login-screen::before { background: #fff; } }
+.login-panel { grid-column: 2; grid-row: 1; width: min(410px, calc(100% - 56px)); align-self: center; justify-self: center; padding: 90px 0; }
 .login-brand { display: flex; width: fit-content; align-items: center; gap: 9px; margin: 0 auto; color: var(--theme-blue, #0878b9); text-decoration: none; }
 .login-brand img { width: 64px; height: 51px; object-fit: contain; }
 .login-brand span { display: grid; gap: 4px; }
@@ -14,4 +16,4 @@
 .login-submit { min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 3px; border: 1px solid var(--accent-border, #285f92); border-radius: 4px; background: #326fae; color: #fff; font: inherit; font-size: 11px; font-weight: 650; cursor: pointer; }
 .login-submit:hover { background: #214f81; }
 .login-submit:disabled { opacity: .65; cursor: wait; }
-@media (max-width: 760px) { .login-panel { width: min(410px, calc(100% - 40px)); padding: 34px 0; } .login-heading { margin-top: 35px; } }
+@media (max-width: 760px) { .login-screen { grid-template-columns: minmax(0, 1fr); } .login-screen::before { display: none; } .login-panel { grid-column: 1; width: min(410px, calc(100% - 40px)); padding: 90px 0 48px; } .login-heading { margin-top: 35px; } }
